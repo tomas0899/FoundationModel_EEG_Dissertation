@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+EEG_data_vis/code/.ipynb_checkpoints/
+# Data
+
+FoundationModel_EEG_Dissertation/EEG_data_vis/data/
+*.csv
+*.mat
+*.npy
+*.npz
+
+# Models
+*.keras
+*.h5
+*.pt
+*.pth
+
+# Logs
+FoundationModel_EEG_Dissertation/EEG_data_vis/logs/
+FoundationModel_EEG_Dissertation/EEG_data_vis/results/
+EEG_data_vis/results
+EEG_data_vis/data
+# Env
+.env
+.mamba/
