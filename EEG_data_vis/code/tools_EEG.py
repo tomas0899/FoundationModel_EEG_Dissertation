@@ -5,6 +5,8 @@ import pandas as pd
 from scipy.io import loadmat
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
+import matplotlib.pyplot as plt
+
 
 def process_eeg_mat_files(folder_path: str) -> Tuple[pd.DataFrame, list]:
     """
@@ -239,6 +241,320 @@ def plot_eeg_availability_with_onsetsV2(
         plt.close()
 
     return df_captured_onsets
+
+def apply_amplitude_cutoff(
+    EEG_Table: pd.DataFrame,
+    threshold: float = 200,
+    start_sec: float = None,
+    end_sec: float = None
+):
+    """
+    Clip EEG amplitudes at ±threshold (µV),
+    optionally selecting a time window in seconds.
+
+    Parameters
+    ----------
+    EEG_Table : pandas.DataFrame
+        DataFrame containing 'Time' column OR time as index (in seconds)
+    threshold : float
+        Amplitude threshold in µV (default 200)
+    start_sec : float, optional
+        Start time of window (in seconds)
+    end_sec : float, optional
+        End time of window (in seconds)
+
+    Returns
+    -------
+    EEG_clipped : pandas.DataFrame
+        Windowed and clipped DataFrame
+    """
+
+    # Copiar para no modificar original
+    EEG_clipped = EEG_Table.copy()
+
+    # ---------------------------------------------------
+    # 1) Selección de ventana temporal (si se especifica)
+    # ---------------------------------------------------
+    if start_sec is not None and end_sec is not None:
+
+        if "Time" in EEG_clipped.columns:
+            EEG_clipped = EEG_clipped[
+                (EEG_clipped["Time"] >= start_sec) &
+                (EEG_clipped["Time"] <= end_sec)
+            ]
+        else:
+            EEG_clipped = EEG_clipped.loc[
+                (EEG_clipped.index >= start_sec) &
+                (EEG_clipped.index <= end_sec)
+            ]
+
+    # ---------------------------------------------------
+    # 2) Aplicar clipping
+    # ---------------------------------------------------
+    if "Time" in EEG_clipped.columns:
+        signal_cols = EEG_clipped.columns.drop("Time")
+        EEG_clipped[signal_cols] = EEG_clipped[signal_cols].clip(
+            lower=-threshold,
+            upper=threshold
+        )
+    else:
+        EEG_clipped = EEG_clipped.clip(
+            lower=-threshold,
+            upper=threshold
+        )
+
+    return EEG_clipped
+
+
+def build_eeg_array_from_mat(
+    hdr,
+    mat_data,
+    output_dir=".",
+    file_prefix="EEG_data",
+    save_format="npz",   # "npy" or "npz"
+    return_dataframe=True
+):
+    """
+    Build EEG array from .mat structure and save as .npy or .npz.
+
+    Parameters
+    ----------
+    hdr : dict
+        Header structure from .mat file
+    mat_data : dict
+        Full .mat dictionary
+    output_dir : str
+        Directory to save output
+    file_prefix : str
+        Prefix for output filename
+    save_format : str
+        "npy" (signal only) or "npz" (signal + metadata)
+    return_dataframe : bool
+        If True, also returns a DataFrame
+
+    Returns
+    -------
+    signal : np.ndarray
+    file_path : str
+    (optional) EEG_Table : pandas.DataFrame
+    """
+
+    # Sampling frequency
+    fs = float(hdr['Fs'][0,0])
+
+    # Channel labels
+    channels_raw = hdr['label'][0,0]
+    channels = [str(row[0][0]) for row in channels_raw]
+
+    # Extract signal
+    signal = np.asarray(mat_data['data'], dtype=np.float32)
+
+    # Fix orientation if needed
+    if signal.shape[1] != len(channels) and signal.shape[0] == len(channels):
+        signal = signal.T
+
+    n_samples = signal.shape[0]
+    time = np.arange(n_samples, dtype=np.float32) / fs
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # -------- SAVE --------
+    if save_format == "npy":
+        file_path = os.path.join(output_dir, f"{file_prefix}.npy")
+        np.save(file_path, signal)
+
+    elif save_format == "npz":
+        file_path = os.path.join(output_dir, f"{file_prefix}.npz")
+        np.savez(
+            file_path,
+            signal=signal,
+            fs=fs,
+            channels=channels,
+            time=time
+        )
+
+    else:
+        raise ValueError("save_format must be 'npy' or 'npz'")
+
+    print(f"Saved EEG data to: {file_path}")
+    print(f"Shape: {signal.shape}")
+    print(f"Sampling frequency: {fs} Hz")
+
+    if return_dataframe:
+        EEG_Table = pd.DataFrame(signal, columns=channels)
+        EEG_Table.insert(0, "Time", time)
+        return signal, file_path, EEG_Table
+
+    return signal, file_path
+import matplotlib.pyplot as plt
+
+def plot_eeg_signals(
+    EEG_Table,
+    time_window=None,      # tuple (start, end) in seconds
+    y_limit=None,          # tuple (-200, 200)
+    figsize=(12,6),
+    color=None             # str or list of colors
+):
+    """
+    Plot EEG signals from a DataFrame with Time column.
+
+    Parameters
+    ----------
+    EEG_Table : pandas.DataFrame
+        DataFrame containing 'Time' + EEG channels
+    time_window : tuple or None
+        (start_time, end_time) in seconds
+    y_limit : tuple or None
+        (ymin, ymax)
+    figsize : tuple
+        Figure size
+    color : str or list
+        Single color for all channels OR list of colors per channel
+    """
+
+    # Apply time window if provided
+    if time_window is not None:
+        start, end = time_window
+        EEG_Table = EEG_Table[
+            (EEG_Table["Time"] >= start) &
+            (EEG_Table["Time"] <= end)
+        ]
+
+    EEG_TimeTable = EEG_Table.set_index("Time")
+
+    fig, axes = plt.subplots(
+        nrows=EEG_TimeTable.shape[1],
+        ncols=1,
+        sharex=True,
+        figsize=figsize
+    )
+
+    if EEG_TimeTable.shape[1] == 1:
+        axes = [axes]
+
+    for i, (ax, channel) in enumerate(zip(axes, EEG_TimeTable.columns)):
+
+        # Select color
+        if isinstance(color, list):
+            plot_color = color[i] if i < len(color) else None
+        else:
+            plot_color = color
+
+        ax.plot(
+            EEG_TimeTable.index,
+            EEG_TimeTable[channel],
+            color=plot_color
+        )
+
+        ax.set_ylabel(channel)
+
+        if y_limit is not None:
+            ax.set_ylim(y_limit)
+
+    axes[-1].set_xlabel("Time (s)")
+    plt.tight_layout()
+    plt.show()
+import os
+import numpy as np
+import scipy.io as sio
+
+def zscore_full_recording_from_matfiles(
+    input_dir: str,
+    output_dir: str,
+    files_to_process: list[str],
+    amp_threshold: float = 200.0,
+    lowcut: float = 0.5,
+    highcut: float = 40.0,
+    order: int = 4,
+    eps: float = 1e-8,
+    save_format: str = "npz",
+):
+    """
+    Procesa .mat de EEG completos (sin ventaneo) y guarda el recording entero z-scoreado.
+
+    Output .npz contiene:
+      X:      (C, N)   señal completa z-scored
+      mu:     (C,)     media por canal
+      sigma:  (C,)     std por canal
+      fs:     float    sampling rate
+      channel_names: (C,)
+      source_file: (1,)
+    """
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    for file_name in files_to_process:
+        mat_path = os.path.join(input_dir, file_name)
+        base_name = os.path.splitext(file_name)[0]
+
+        if not os.path.exists(mat_path):
+            print(f"File not found, skipping: {mat_path}")
+            continue
+
+        try:
+            print(f"\n--- Processing file: {file_name} ---")
+
+            # 1️⃣ Load MAT
+            mat_contents = sio.loadmat(mat_path)
+            header_dict = mat_contents["hdr"]
+
+            # 2️⃣ Convert to DataFrame (Time + channels)
+            _, _, df_eeg = build_eeg_array_from_mat(
+                hdr=header_dict,
+                mat_data=mat_contents,
+                output_dir=output_dir,
+                file_prefix=base_name,
+                save_format=save_format,
+                return_dataframe=True
+            )
+
+            channel_cols = [c for c in df_eeg.columns if c != "Time"]
+
+            # 3️⃣ Amplitude cutoff
+            df_cutoff = apply_amplitude_cutoff(
+                df_eeg,
+                threshold=amp_threshold,
+                start_sec=float(df_eeg["Time"].min()),
+                end_sec=float(df_eeg["Time"].max())
+            )
+
+            # 4️⃣ Bandpass filter
+            df_cutoff_idx = df_cutoff.set_index("Time")
+            df_filtered_idx, fs = bandpass_filter_eegwin(
+                df_cutoff_idx, lowcut=lowcut, highcut=highcut, order=order
+            )
+            df_filtered = df_filtered_idx.reset_index()
+
+            # 5️⃣ Convert to numpy (C, N)
+            arr = df_filtered[channel_cols].to_numpy(dtype=np.float32).T
+
+            # 6️⃣ Z-score por canal (global sobre todo el recording)
+            mu = arr.mean(axis=1, keepdims=True)      # (C,1)
+            sigma = arr.std(axis=1, keepdims=True)    # (C,1)
+            sigma = np.where(sigma < eps, eps, sigma)
+
+            z = (arr - mu) / sigma                    # (C, N)
+
+            # 7️⃣ Guardar
+            out_path = os.path.join(output_dir, f"{base_name}_zscore_full.npz")
+
+            np.savez_compressed(
+                out_path,
+                X=z,
+                mu=mu.squeeze(1),
+                sigma=sigma.squeeze(1),
+                fs=float(fs),
+                channel_names=np.array(channel_cols, dtype=object),
+                source_file=np.array([file_name], dtype=object),
+            )
+
+            print(f"Saved: {out_path}")
+            print(f"Shape: {z.shape} (channels, samples)")
+
+        except Exception as e:
+            print(f"Error processing {file_name}: {e}")
+
+    print("\nAll specified files processed!")
 
 def plot_eeg_availability_with_onsets(
     df_files: pd.DataFrame, 
