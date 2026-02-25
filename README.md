@@ -168,7 +168,7 @@ The embedding space learned by a future foundation model could support:
 
 ## 9. Author
 
-Tomás Pérez  
+Tomás Pérez Sánchez
 MSc Applied Bioinformatics  
 King’s College London  
 
