@@ -25,3 +25,5 @@ EEG_data_vis/data
 # Env
 .env
 .mamba/
+EEG_data_vis/code/plots_html/
+.ipynb_checkpoints/
