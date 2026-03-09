@@ -27,3 +27,6 @@ EEG_data_vis/data
 .mamba/
 EEG_data_vis/code/plots_html/
 .ipynb_checkpoints/
+
+EEG_data_vis/code/plots_html/
+.ipynb_checkpoints/
