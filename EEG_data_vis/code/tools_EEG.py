@@ -1,30 +1,17 @@
 # Change - Tears for fears 
 import os
-import numpy as np
-import pandas as pd
-from scipy.io import loadmat
-from datetime import datetime, timedelta
-from typing import Tuple, Optional
-import matplotlib.pyplot as pltimport
-import matplotlib.pyplot as plt
-import os
-from typing import Optional
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
-from typing import Optional, Tuple
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
-from typing import Optional
-import pandas as pd
 from pathlib import Path
-from typing import Tuple
-import os
-import numpy as np
-import scipy.io as sio
+from datetime import datetime, timedelta
+from typing import Optional, Tuple
 
-    
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from scipy.io import loadmat
+import scipy.io as sio
+from scipy.signal import welch
+from matplotlib.backends.backend_pdf import PdfPages
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -485,7 +472,7 @@ def build_eeg_array_from_mat_1_6(
     """
 
     # Sampling frequency
-    fs = float(hdr['Fs'][0,0])
+    fs = float(np.squeeze(hdr['Fs']))
 
     # Channel labels
     channels_raw = hdr['label'][0,0]
@@ -499,7 +486,7 @@ def build_eeg_array_from_mat_1_6(
         signal = signal.T
 
     n_samples = signal.shape[0]
-    time = np.arange(n_samples, dtype=np.float32) / fs
+    time = np.arange(n_samples, dtype=np.float64) / fs
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -612,7 +599,7 @@ def plot_eeg_signals_1_7(
 def bandpass_filter_eegwin_1_8(
     EEG_win: pd.DataFrame,
     lowcut: float = 0.5,
-    highcut: float = 40.0,
+    highcut: float = 48.0,
     order: int = 4,
     check_nans: bool = True
 ):
@@ -689,7 +676,9 @@ def zscore_full_recording_from_matfiles_1_9(
     order: int = 4,
     eps: float = 1e-8,
     save_format: str = "npz",
+    do_zscore: bool = True,   
 ):
+
     """
     Processes full EEG .mat recordings (no windowing) and saves the entire
     z-scored recording.
@@ -749,8 +738,8 @@ def zscore_full_recording_from_matfiles_1_9(
             df_file["TF"] = pd.to_datetime(df_file["TF"], errors="coerce")
             
             # Convert to ISO string format (will repeat if multiple matches exist)
-            t0_iso = df_file["T0"].dt.strftime("%Y-%m%d%H:%M:%S.%f").to_numpy(dtype=object)
-            tf_iso = df_file["TF"].dt.strftime("%Y-%m-%d%H:%M:%S.%f").to_numpy(dtype=object)
+            t0_iso = df_file["T0"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
+            tf_iso = df_file["TF"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
             # 1) Load MAT
             mat_contents = sio.loadmat(mat_path)
             header_dict = mat_contents["hdr"]
@@ -782,34 +771,35 @@ def zscore_full_recording_from_matfiles_1_9(
             )
             df_filtered = df_filtered_idx.reset_index()
 
-            # 5) Convert to numpy (C, N)
+         # 5) Convert to numpy (C, N)
             arr = df_filtered[channel_cols].to_numpy(dtype=np.float32).T
-
-            # 6) Z-score por canal
+        
+            # stats (siempre)
             mu = arr.mean(axis=1, keepdims=True)      # (C,1)
             sigma = arr.std(axis=1, keepdims=True)    # (C,1)
             sigma = np.where(sigma < eps, eps, sigma)
-            z = (arr - mu) / sigma                    # (C, N)
-
-            # 7) Save
-            out_path = os.path.join(output_dir, f"{base_name}_zscore_full.npz")
-
+        
+            if do_zscore:
+                X = (arr - mu) / sigma
+                suffix = "zscore_full"
+            else:
+                X = arr
+                suffix = "preproc_full"
+        
+            out_path = os.path.join(output_dir, f"{base_name}_{suffix}.npz")
+        
             np.savez_compressed(
                 out_path,
-                X=z,
+                X=X,
                 mu=mu.squeeze(1),
                 sigma=sigma.squeeze(1),
                 fs=float(fs),
                 channel_names=np.array(channel_cols, dtype=object),
                 source_file=np.array([file_name], dtype=object),
                 seizure_onsets=seizure_onsets_iso,
-                T0=t0_iso,   # NEW
-                TF=tf_iso,   # NEW
+                T0=t0_iso,
+                TF=tf_iso,
             )
-
-            print(f"Saved: {out_path}")
-            print(f"Shape: {z.shape} (channels, samples)")
-            print(f"Seizures in this file: {len(seizure_onsets_iso)}")
 
         except Exception as e:
             print(f"Error processing {file_name}: {e}")
@@ -910,6 +900,9 @@ def visualize_seizure_windows_from_npz_1_10(
     if len(seizure_onsets) == 0:
         print("No seizures found in this file.")
         return
+    if channel_idx < 0 or channel_idx >= X.shape[0]:
+        
+        raise ValueError(f"channel_idx={channel_idx} out of bounds for X with shape {X.shape}")
 
     T0_str = str(T0)
 
@@ -918,18 +911,19 @@ def visualize_seizure_windows_from_npz_1_10(
     if len(T0_str) >= 11 and T0_str[10] != " ":
         T0_str = T0_str[:10] + " " + T0_str[10:]
     
-    T0_dt = _parse_compact_datetime_str(T0)
+    T0_dt = _parse_compact_datetime_str(T0_str)
 
     window_samples = int(window_sec * fs)
     total_samples = window_samples * n_windows
-
+    pdf_path = f"{source_file}_seizures.pdf"
+    pdf = PdfPages(pdf_path)
     for s_idx, onset_str in enumerate(seizure_onsets):
 
         onset_dt = _parse_compact_datetime_str(onset_str)
 
         # Compute seizure position in samples
         delta_sec = (onset_dt - T0_dt).total_seconds()
-        onset_sample = int(delta_sec * fs)
+        onset_sample = int(round(delta_sec * fs))
 
         end_sample = onset_sample + total_samples
 
@@ -938,9 +932,10 @@ def visualize_seizure_windows_from_npz_1_10(
             continue
 
         print(
-    f"[{source_file}] Seizure {s_idx} "
-    f"at sample {onset_sample} "
-    f"(t = {delta_sec:.2f} sec)"
+            f"[{source_file}] Seizure {s_idx} | "
+            f"Onset: {onset_dt} | "
+            f"sample={onset_sample} | "
+            f"t={delta_sec:.2f} s from T0"
 )
 
         fig, axes = plt.subplots(
@@ -956,24 +951,208 @@ def visualize_seizure_windows_from_npz_1_10(
             end = start + window_samples
 
             segment = X[channel_idx, start:end]
-
-            axes[w].plot(segment)
+            window_start_dt = onset_dt + pd.to_timedelta(w * window_sec, unit="s")
+            window_end_dt   = window_start_dt + pd.to_timedelta(window_sec, unit="s")
+            t_sec = np.arange(len(segment)) / fs
+            axes[w].plot(t_sec, segment, linewidth=0.8)
+            axes[w].set_xlim(0, window_sec)
+            axes[w].set_xlabel("Time within window (s)")
+            axes[w].set_ylabel("Amplitude")
             axes[w].set_title(
-                f"Seizure {s_idx} | Window {w} "
-                f"({w*window_sec}-{(w+1)*window_sec} sec)"
-            )
+                f"Seizure {s_idx} | Onset: {onset_dt} | "
+                f"Window {w+1}/{n_windows} | "
+                f"{window_start_dt} to {window_end_dt}"
+)
             axes[w].axhline(0, linestyle="--")
 
         plt.tight_layout()
-        plt.show()
+        pdf.savefig(fig)
+        plt.close(fig)
+    pdf.close()
+    print(f"Saved PDF: {pdf_path}")
 #visualize_seizure_windows_from_npz(
 #    npz_path=file_path,
 #    channel_idx=0,
 #    window_sec=10,
 #    n_windows=5
 #)
+#version 2
+def visualize_seizure_windows_from_npz_1_10V2(
+npz_path: str,
+channel_idx_1: int = 0,
+channel_idx_2: int = 1,
+window_sec: int = 10,
+n_windows: int = 5,
+output_dir: str = "."
+):
+
+    """
+    Visualize consecutive EEG segments starting from each seizure onset.
+
+    For each seizure:
+        - Plots n_windows windows
+        - Each window is window_sec long
+        - Total duration = window_sec * n_windows
+
+    Parameters
+    ----------
+    npz_path : str
+        Path to preprocessed .npz file.
+    channel_idx : int
+        Channel index to visualize.
+    window_sec : int
+        Length of each window in seconds.
+    n_windows : int
+        Number of consecutive windows to plot.
+    """
+
+    data = np.load(npz_path, allow_pickle=True)
+
+    X = data["X"]                     # (C, N)
+    fs = float(data["fs"])
+    seizure_onsets = data["seizure_onsets"]
+    T0 = data["T0"][0]                # first T0 (they repeat)
+    source_file = str(data["source_file"][0])
+    if len(seizure_onsets) == 0:
+        print("No seizures found in this file.")
+        return
+    if channel_idx_1 < 0 or channel_idx_1 >= X.shape[0]:
+        raise ValueError(f"channel_idx_1={channel_idx_1} out of bounds for X with shape {X.shape}")
+    
+    if channel_idx_2 < 0 or channel_idx_2 >= X.shape[0]:
+        raise ValueError(f"channel_idx_2={channel_idx_2} out of bounds for X with shape {X.shape}")
+
+    T0_str = str(T0)
+
+    # Fix common formatting bug: missing space between date and time
+    # e.g. "2019-11-0107:43:13.000000" -> "2019-11-01 07:43:13.000000"
+    if len(T0_str) >= 11 and T0_str[10] != " ":
+        T0_str = T0_str[:10] + " " + T0_str[10:]
+    
+    T0_dt = _parse_compact_datetime_str(T0_str)
+
+    window_samples = int(window_sec * fs)
+    total_samples = window_samples * n_windows
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(npz_path))[0]
+    pdf_path = os.path.join(output_dir, f"{base_name}_seizures.pdf")
+    pdf = PdfPages(pdf_path)
+    for s_idx, onset_str in enumerate(seizure_onsets):
+
+        onset_dt = _parse_compact_datetime_str(onset_str)
+
+        # Compute seizure position in samples
+        delta_sec = (onset_dt - T0_dt).total_seconds()
+        onset_sample = int(round(delta_sec * fs))
+
+        end_sample = onset_sample + total_samples
+
+        if onset_sample < 0 or end_sample > X.shape[1]:
+            print(f"Seizure {s_idx}: out of bounds, skipping.")
+            continue
+
+        print(
+            f"[{source_file}] Seizure {s_idx} | "
+            f"Onset: {onset_dt} | "
+            f"sample={onset_sample} | "
+            f"t={delta_sec:.2f} s from T0 | "
+            f"channels=({channel_idx_1}, {channel_idx_2})"
+        )
+
+        fig, axes = plt.subplots(n_windows,2,figsize=(16, 2.5*n_windows),sharex=False)
+        if n_windows == 1:
+            axes = np.array([axes])
+        for w in range(n_windows):
+
+            start = onset_sample + w * window_samples
+            end = start + window_samples
+
+            segment_1 = X[channel_idx_1, start:end]
+            segment_2 = X[channel_idx_2, start:end]
+            window_start_dt = onset_dt + pd.to_timedelta(w * window_sec, unit="s")
+            window_end_dt   = window_start_dt + pd.to_timedelta(window_sec, unit="s")
+            t_sec = np.arange(len(segment_1)) / fs
+            axes[w, 0].plot(t_sec, segment_1, color="blue", linewidth=0.8)
+            axes[w, 0].set_xlim(0, window_sec)
+            axes[w, 0].set_xlabel("Time within window (s)")
+            axes[w, 0].set_ylabel("Amplitude")
+            axes[w, 0].set_title(
+                f"Seizure {s_idx} | Window {w+1}/{n_windows} | "
+                f"Ch {channel_idx_1} | {window_start_dt} to {window_end_dt}"
+            )
+            axes[w, 0].axhline(0, linestyle="--", linewidth=0.8)
+            
+            axes[w, 1].plot(t_sec, segment_2, color="red", linewidth=0.8)
+            axes[w, 1].set_xlim(0, window_sec)
+            axes[w, 1].set_xlabel("Time within window (s)")
+            axes[w, 1].set_ylabel("Amplitude")
+            axes[w, 1].set_title(
+                f"Seizure {s_idx} | Window {w+1}/{n_windows} | "
+                f"Ch {channel_idx_2} | {window_start_dt} to {window_end_dt}"
+            )
+            axes[w, 1].axhline(0, linestyle="--", linewidth=0.8)
+        fig.suptitle(f"{source_file} | Seizure {s_idx} | Onset: {onset_dt}",y=1.02,fontsize=12)
+        
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+    
+    pdf.close()
+    print(f"Saved PDF: {pdf_path}")
+#visualize_seizure_windows_from_npz(
+#    npz_path=file_path,
+#    channel_idx=0,
+#    window_sec=10,
+#    n_windows=5
+#)
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# FUNCTION #11
 
 
+def plot_welch_overlay_from_npz_1_11(npz_path, nperseg_seconds=4, max_freq=120):
+    # 1. Open the npz file
+    data = np.load(npz_path, allow_pickle=True)
+
+    # 2. Extract the stored arrays
+    X = data["X"]                      # shape: (C, N)
+    fs = float(data["fs"])             # sampling frequency
+    channel_names = data["channel_names"]
+
+    # 3. Convert Welch window length from seconds to samples
+    nperseg = int(fs * nperseg_seconds)
+
+    # 4. Create one figure for all channels
+    plt.figure(figsize=(9, 5))
+
+    # 5. Loop over channels
+    n_channels = X.shape[0]
+
+    for i in range(n_channels):
+        # Extract one channel
+        signal_1d = X[i, :]
+
+        # Compute Welch PSD
+        frequencies, power = welch(signal_1d, fs=fs, nperseg=nperseg)
+
+        # Plot this channel
+        plt.semilogy(frequencies, power, label=str(channel_names[i]))
+
+    # 6. Add filter cutoff reference lines
+    plt.axvline(0.5, linestyle="--", label="0.5 Hz cutoff")
+    plt.axvline(40, linestyle="--", label="40 Hz cutoff")
+
+    # 7. Limit x-axis to desired range or Nyquist frequency
+    plt.xlim(0, min(max_freq, fs / 2))
+
+    # 8. Labels and layout
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("PSD")
+    plt.title("Welch PSD of preprocessed EEG")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 #=================================================================================
 #=================================================================================
 #=================================================================================
