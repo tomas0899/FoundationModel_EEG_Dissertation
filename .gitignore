@@ -3,7 +3,8 @@ __pycache__/
 *.pyc
 EEG_data_vis/code/.ipynb_checkpoints/
 # Data
-
+.ipynb_checkpoints/
+*.html
 FoundationModel_EEG_Dissertation/EEG_data_vis/data/
 *.csv
 *.mat
