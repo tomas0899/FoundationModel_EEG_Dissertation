@@ -3,15 +3,17 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
 from scipy.io import loadmat
 import scipy.io as sio
 from scipy.signal import welch
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.signal import welch
+import glob
+from scipy.signal import iirnotch, tf2sos
+from scipy.signal import butter, sosfiltfilt, iirnotch, tf2sos
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -444,7 +446,8 @@ def build_eeg_array_from_mat_1_6(
     output_dir=".",
     file_prefix="EEG_data",
     save_format="npz",   # "npy" or "npz"
-    return_dataframe=True
+    return_dataframe=True,
+    save=True
 ):
     """
     Build EEG array from .mat structure and save as .npy or .npz.
@@ -491,27 +494,33 @@ def build_eeg_array_from_mat_1_6(
     os.makedirs(output_dir, exist_ok=True)
 
     # -------- SAVE --------
-    if save_format == "npy":
-        file_path = os.path.join(output_dir, f"{file_prefix}.npy")
-        np.save(file_path, signal)
-
-    elif save_format == "npz":
-        file_path = os.path.join(output_dir, f"{file_prefix}.npz")
-        np.savez(
-            file_path,
-            signal=signal,
-            fs=fs,
-            channels=channels,
-            time=time
-        )
-
+    if save:
+        
+        if save_format == "npy":
+            file_path = os.path.join(output_dir, f"{file_prefix}.npy")
+            np.save(file_path, signal)
+    
+        elif save_format == "npz":
+            file_path = os.path.join(output_dir, f"{file_prefix}.npz")
+            np.savez(
+                file_path,
+                signal=signal,
+                fs=fs,
+                channels=channels,
+                time=time
+            )
+    
+        else:
+            raise ValueError("save_format must be 'npy' or 'npz'")
+    
+        print(f"Saved EEG data to: {file_path}")
+        print(f"Shape: {signal.shape}")
+        print(f"Sampling frequency: {fs} Hz")
     else:
-        raise ValueError("save_format must be 'npy' or 'npz'")
-
-    print(f"Saved EEG data to: {file_path}")
-    print(f"Shape: {signal.shape}")
-    print(f"Sampling frequency: {fs} Hz")
-
+        file_path= None 
+        #print(f"Saved EEG data to: {file_path}")
+        print(f"Shape: {signal.shape}")
+        print(f"Sampling frequency: {fs} Hz")
     if return_dataframe:
         EEG_Table = pd.DataFrame(signal, columns=channels)
         EEG_Table.insert(0, "Time", time)
@@ -601,7 +610,9 @@ def bandpass_filter_eegwin_1_8(
     lowcut: float = 0.5,
     highcut: float = 48.0,
     order: int = 4,
-    check_nans: bool = True
+    check_nans: bool = True,
+    notch_freq: float | None = None,
+    notch_Q: float = 10.0
 ):
     """
     Band-pass robusto usando SOS + sosfiltfilt (fase cero).
@@ -631,7 +642,9 @@ def bandpass_filter_eegwin_1_8(
         raise ValueError(f"highcut ({highcut} Hz) debe ser < Nyquist ({nyq:.2f} Hz).")
     if lowcut >= highcut:
         raise ValueError("lowcut debe ser < highcut.")
-
+    if notch_freq is not None and notch_freq >= nyq:
+        
+        raise ValueError(f"notch_freq ({notch_freq} Hz) debe ser < Nyquist ({nyq:.2f} Hz).")
     # --- 3) NaNs ---
     if check_nans and EEG_win.isna().any().any():
         raise ValueError("EEG_win contiene NaNs. Rellena/interpola antes de filtrar.")
@@ -639,20 +652,26 @@ def bandpass_filter_eegwin_1_8(
     # --- 4) Diseñar filtro ---
     low  = lowcut / nyq
     high = highcut / nyq
-    sos = butter(order, [low, high], btype="band", output="sos")
-
-
+    sos_band = butter(order, [low, high], btype="band", output="sos")
+    sos_notch = None
+    if notch_freq is not None:
+        w0 = notch_freq / nyq
+        b, a = iirnotch(w0, notch_Q)
+        sos_notch = tf2sos(b, a)
 
     # --- 5) Filtrar ---
     X = EEG_win.to_numpy(dtype=float)  # (n_samples, n_channels)
     try:
-        Xf = sosfiltfilt(sos, X, axis=0)
+        Xf = sosfiltfilt(sos_band, X, axis=0)
+
+        if sos_notch is not None:
+            Xf = sosfiltfilt(sos_notch, Xf, axis=0)
+
     except ValueError as e:
         raise ValueError(
             f"No se pudo filtrar (posible ventana corta/padding). "
             f"Prueba una ventana más larga o baja el orden. Error: {e}"
         )
-
     EEG_win_filt = pd.DataFrame(Xf, index=EEG_win.index, columns=EEG_win.columns)
     return EEG_win_filt, fs
 #=================================================================================
@@ -660,19 +679,14 @@ def bandpass_filter_eegwin_1_8(
 #=================================================================================
 # FUNCTION #9
 
-import os
-import numpy as np
-import scipy.io as sio
-import pandas as pd
-
-def zscore_full_recording_from_matfiles_1_9(
+def full_recording_from_matfiles_1_9(
     input_dir: str,
     output_dir: str,
     files_to_process: list[str],
     df_matches: pd.DataFrame,              
     amp_threshold: float = 200.0,
     lowcut: float = 0.5,
-    highcut: float = 40.0,
+    highcut: float = 48.0,
     order: int = 4,
     eps: float = 1e-8,
     save_format: str = "npz",
@@ -805,6 +819,172 @@ def zscore_full_recording_from_matfiles_1_9(
             print(f"Error processing {file_name}: {e}")
 
     print("\nAll specified files processed!")
+
+def full_recording_from_matfiles_1_9_V2(
+    input_dir: str,
+    output_dir: str,
+    files_to_process: list[str],
+    df_matches: pd.DataFrame,              
+    amp_threshold: float = 200.0,
+    lowcut: float = 0.5,
+    highcut: float = 48.0,
+    order: int = 4,
+    eps: float = 1e-8,
+    save_format: str = "npz",
+    do_zscore: bool = True,   
+    notch_freq: float | None = None,
+    notch_Q: float = 30.0,
+
+):
+
+    """
+    Processes full EEG .mat recordings (no windowing) and saves the entire
+    z-scored recording.
+    
+    The output .npz file contains:
+    
+      X:               (C, N) full z-scored signal (channels × samples). if the option is selected, if not is going to store the normal data
+      mu:              (C,)   mean per channel (computed over full recording)
+      sigma:           (C,)   standard deviation per channel
+      fs:              float  sampling rate
+      channel_names:   (C,)   channel labels
+      source_file:     (1,)   original .mat file name
+      seizure_onsets:  (K,)   seizure onset timestamps (ISO format) associated
+                               with this .mat file (K may be 0)
+      T0:              (K,)   recording start timestamps (ISO format) from
+                               df_matches (may repeat if multiple matches exist)
+      TF:              (K,)   recording end timestamps (ISO format) from
+                               df_matches (may repeat if multiple matches exist)
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Normalizamos columnas clave (por si vienen como string)
+    dfm = df_matches.copy()
+    if "file" not in dfm.columns or "onset" not in dfm.columns:
+        raise ValueError("df_matches must contain columns: ['file', 'onset']")
+    if "T0" not in dfm.columns or "TF" not in dfm.columns:
+        raise ValueError("df_matches must contain columns: ['T0', 'TF']")
+        
+    dfm["file"] = dfm["file"].astype(str)
+    dfm["onset"] = pd.to_datetime(dfm["onset"], errors="coerce")
+
+    for file_name in files_to_process:
+        mat_path = os.path.join(input_dir, file_name)
+        base_name = os.path.splitext(file_name)[0]
+
+        if not os.path.exists(mat_path):
+            print(f"File not found, skipping: {mat_path}")
+            continue
+
+        try:
+            print(f"\n--- Processing file: {file_name} ---")
+
+
+            # ✅ 0) Extraer filas asociadas a ESTE mat file
+            df_file = dfm.loc[dfm["file"] == file_name].copy()
+            
+            # Ensure datetime format
+            df_file["onset"] = pd.to_datetime(df_file["onset"], errors="coerce")
+            df_file["T0"] = pd.to_datetime(df_file["T0"], errors="coerce")
+            df_file["TF"] = pd.to_datetime(df_file["TF"], errors="coerce")
+            
+            # Caso 1: el archivo NI SIQUIERA está en df_matches
+            if df_file.empty:
+                seizure_onsets_iso = np.array([np.nan], dtype=object)
+                t0_iso = np.array([np.nan], dtype=object)
+                tf_iso = np.array([np.nan], dtype=object)
+            
+            else:
+                # onsets válidos
+                onsets = df_file["onset"].dropna().sort_values()
+            
+                # Si no hay onset válido, guardar NaN
+                if onsets.empty:
+                    seizure_onsets_iso = np.array([np.nan], dtype=object)
+                else:
+                    seizure_onsets_iso = onsets.dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
+            
+                # T0 / TF
+                t0_iso = df_file["T0"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
+                tf_iso = df_file["TF"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
+            
+                # si por alguna razón quedan vacíos
+                if t0_iso.size == 0:
+                    t0_iso = np.array([np.nan], dtype=object)
+                if tf_iso.size == 0:
+                    tf_iso = np.array([np.nan], dtype=object)
+            # 1) Load MAT
+            mat_contents = sio.loadmat(mat_path)
+            header_dict = mat_contents["hdr"]
+
+            # 2) Convert to DataFrame (Time + channels)
+            _, _, df_eeg = build_eeg_array_from_mat_1_6(
+                hdr=header_dict,
+                mat_data=mat_contents,
+                output_dir=output_dir,
+                file_prefix=base_name,
+                save_format=save_format,
+                return_dataframe=True,
+                save=False
+            )
+
+            channel_cols = [c for c in df_eeg.columns if c != "Time"]
+
+            # 3) Amplitude cutoff
+            df_cutoff = apply_amplitude_cutoff_1_5(
+                df_eeg,
+                threshold=amp_threshold,
+                start_sec=float(df_eeg["Time"].min()),
+                end_sec=float(df_eeg["Time"].max())
+            )
+
+            # 4) Bandpass filter
+            df_cutoff_idx = df_cutoff.set_index("Time")
+            df_filtered_idx, fs = bandpass_filter_eegwin_1_8(
+                df_cutoff_idx,
+                lowcut=lowcut,
+                highcut=highcut,
+                order=order,
+                notch_freq=notch_freq,
+                notch_Q=notch_Q
+            )
+            df_filtered = df_filtered_idx.reset_index()
+
+         # 5) Convert to numpy (C, N)
+            arr = df_filtered[channel_cols].to_numpy(dtype=np.float32).T
+        
+            # stats (siempre)
+            mu = arr.mean(axis=1, keepdims=True)      # (C,1)
+            sigma = arr.std(axis=1, keepdims=True)    # (C,1)
+            sigma = np.where(sigma < eps, eps, sigma)
+        
+            if do_zscore:
+                X = (arr - mu) / sigma
+                suffix = "zscore_full"
+            else:
+                X = arr
+                suffix = "preproc_full"
+        
+            out_path = os.path.join(output_dir, f"{base_name}_{suffix}.npz")
+        
+            np.savez_compressed(
+                out_path,
+                X=X,
+                mu=mu.squeeze(1),
+                sigma=sigma.squeeze(1),
+                fs=float(fs),
+                channel_names=np.array(channel_cols, dtype=object),
+                source_file=np.array([file_name], dtype=object),
+                seizure_onsets=seizure_onsets_iso,
+                T0=t0_iso,
+                TF=tf_iso,
+            )
+
+        except Exception as e:
+            print(f"Error processing {file_name}: {e}")
+
+    print("\nAll specified files processed!")
+
 
 #=================================================================================
 #=================================================================================
@@ -1105,6 +1285,177 @@ output_dir: str = "."
 #    window_sec=10,
 #    n_windows=5
 #)
+    
+# VERSION 3 WITH PRE-ICTAL
+def visualize_seizure_windows_from_npz_1_10V3(
+    npz_path: str,
+    channel_idx_1: int = 0,
+    channel_idx_2: int = 1,
+    window_sec: int = 10,
+    n_windows: int = 11,   
+    pre_onset_sec: int = 60,
+    vertical_offset_uv: float = 100.0,
+    output_dir: str = "."
+):
+    """
+    Visualiza segmentos consecutivos de EEG alrededor de cada seizure onset.
+
+    Modificaciones:
+    - Ambos canales se plotean en el mismo subplot por ventana
+    - channel_idx_2 se desplaza verticalmente +vertical_offset_uv
+    - El ploteo empieza pre_onset_sec antes del onset
+    - Se agrega sombreado amarillo suave de 2 s desde el onset
+    """
+
+    data = np.load(npz_path, allow_pickle=True)
+
+    X = data["X"]                     # shape: (C, N)
+    fs = float(data["fs"])
+    seizure_onsets = data["seizure_onsets"]
+    T0 = data["T0"][0]
+    source_file = str(data["source_file"][0])
+
+    # --- limpiar onsets inválidos ---
+    seizure_onsets_clean = []
+    
+    for s in seizure_onsets:
+        if s is None:
+            continue
+        s_str = str(s).strip().lower()
+        if s_str == "nan" or s_str == "":
+            continue
+        seizure_onsets_clean.append(s)
+    
+    # si no hay seizures válidos → omitir archivo
+    if len(seizure_onsets_clean) == 0:
+        print(f"{os.path.basename(npz_path)} → no seizures, skipping.")
+        return
+
+    if channel_idx_1 < 0 or channel_idx_1 >= X.shape[0]:
+        raise ValueError(f"channel_idx_1={channel_idx_1} out of bounds for X with shape {X.shape}")
+
+    if channel_idx_2 < 0 or channel_idx_2 >= X.shape[0]:
+        raise ValueError(f"channel_idx_2={channel_idx_2} out of bounds for X with shape {X.shape}")
+
+    T0_str = str(T0)
+
+    # Corrige formato tipo "2019-11-0107:43:13.000000"
+    if len(T0_str) >= 11 and T0_str[10] != " ":
+        T0_str = T0_str[:10] + " " + T0_str[10:]
+
+    T0_dt = _parse_compact_datetime_str(T0_str)
+
+    window_samples = int(window_sec * fs)
+    pre_onset_samples = int(pre_onset_sec * fs)
+    total_samples = window_samples * n_windows
+
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(npz_path))[0]
+    pdf_path = os.path.join(output_dir, f"{base_name}_seizures_overlay.pdf")
+    pdf = PdfPages(pdf_path)
+
+    for s_idx, onset_str in enumerate(seizure_onsets_clean):
+        onset_dt = _parse_compact_datetime_str(onset_str)
+
+        # posición del onset en samples
+        delta_sec = (onset_dt - T0_dt).total_seconds()
+        onset_sample = int(round(delta_sec * fs))
+
+        # arrancar pre_onset_sec antes del onset
+        plot_start_sample = onset_sample - pre_onset_samples
+        plot_end_sample = plot_start_sample + total_samples
+
+        if plot_start_sample < 0 or plot_end_sample > X.shape[1]:
+            print(f"Seizure {s_idx}: out of bounds, skipping.")
+            continue
+
+        print(
+            f"[{source_file}] Seizure {s_idx} | "
+            f"Onset: {onset_dt} | "
+            f"onset_sample={onset_sample} | "
+            f"plot_start={plot_start_sample} | "
+            f"channels=({channel_idx_1}, {channel_idx_2})"
+        )
+
+        fig, axes = plt.subplots(n_windows, 1, figsize=(16, 2.8 * n_windows), sharex=False)
+
+        if n_windows == 1:
+            axes = np.array([axes])
+
+        for w in range(n_windows):
+            start = plot_start_sample + w * window_samples
+            end = start + window_samples
+
+            segment_1 = X[channel_idx_1, start:end]
+            segment_2 = X[channel_idx_2, start:end] + vertical_offset_uv
+
+            # tiempo relativo dentro de la ventana
+            t_sec = np.arange(len(segment_1)) / fs
+
+            # tiempo absoluto de inicio/fin de la ventana
+            window_start_dt = T0_dt + pd.to_timedelta(start / fs, unit="s")
+            window_end_dt   = T0_dt + pd.to_timedelta(end / fs, unit="s")
+
+            # tiempo relativo al onset
+            rel_start_sec = (start - onset_sample) / fs
+            rel_end_sec   = (end - onset_sample) / fs
+
+            ax = axes[w]
+
+            # sombreado amarillo suave de 2 s desde el onset, si cae en esta ventana
+            if rel_start_sec <= 0 < rel_end_sec:
+                onset_in_window_sec = -rel_start_sec
+                shade_end = min(onset_in_window_sec + 2.0, window_sec)
+
+                ax.axvspan(
+                    onset_in_window_sec,
+                    shade_end,
+                    color="gold",
+                    alpha=0.22,
+                    zorder=0,
+                    label="Onset + 2 s"
+                )
+
+                ax.axvline(
+                    onset_in_window_sec,
+                    color="black",
+                    linestyle="--",
+                    linewidth=1.0,
+                    label="Onset"
+                )
+
+            ax.plot(t_sec, segment_1, color="blue", linewidth=0.8, label=f"Ch {channel_idx_1}")
+            ax.plot(t_sec, segment_2, color="red", linewidth=0.8, label=f"Ch {channel_idx_2} (+{vertical_offset_uv:.0f} µV)")
+
+            # líneas guía
+            ax.axhline(0, color="blue", linestyle="--", linewidth=0.6, alpha=0.7)
+            ax.axhline(vertical_offset_uv, color="red", linestyle="--", linewidth=0.6, alpha=0.7)
+
+            ax.set_xlim(0, window_sec)
+            ax.set_xlabel("Time within window (s)")
+            ax.set_ylabel("Amplitude (µV)")
+            ax.set_title(
+                f"Seizure {s_idx} | Window {w+1}/{n_windows} | "
+                f"{window_start_dt} to {window_end_dt} | "
+                f"rel. to onset: {rel_start_sec:.1f}s to {rel_end_sec:.1f}s"
+            )
+
+            if w == 0:
+                ax.legend(loc="upper right", fontsize=8)
+
+        fig.suptitle(
+            f"{source_file} | Seizure {s_idx} | Onset: {onset_dt} | "
+            f"Start plotting {pre_onset_sec}s before onset",
+            y=1.02,
+            fontsize=12
+        )
+
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    pdf.close()
+    print(f"Saved PDF: {pdf_path}")
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -1156,6 +1507,738 @@ def plot_welch_overlay_from_npz_1_11(npz_path, nperseg_seconds=4, max_freq=120):
 #=================================================================================
 #=================================================================================
 #=================================================================================
+# FUNCTION #12
+# PSD graph visualizer
+
+def plot_psd_from_npz_1_12(
+    npz_path_1: str,
+    npz_path_2: str | None = None,
+    channel: int = 0,
+    nperseg_sec: float = 4.0,
+    overlap_frac: float = 0.5,
+    xlim: tuple[float, float] | None = None,
+    peak_band: tuple[float, float] | None = None,
+    top_n_peaks: int = 1,
+    use_semilogy: bool = True,
+    figsize: tuple[int, int] = (10, 5),
+    strict_checks: bool = True,
+):
+    """
+    Plot Welch PSD from one or two EEG NPZ files.
+
+    Supports:
+    - raw NPZ with keys like: signal (N, C), fs, channels
+    - processed NPZ with keys like: X (C, N), fs, channel_names
+
+    Parameters
+    ----------
+    npz_path_1 : str
+        Path to first NPZ file.
+    npz_path_2 : str | None
+        Optional path to second NPZ file for comparison.
+    channel : int
+        Channel index to analyze.
+    nperseg_sec : float
+        Welch window length in seconds.
+    overlap_frac : float
+        Fractional overlap between windows (e.g. 0.5 = 50%).
+    xlim : tuple[float, float] | None
+        Frequency range to display, e.g. (0, 80) or (25, 45).
+        If None, defaults to full available range.
+    peak_band : tuple[float, float] | None
+        Frequency band in which to search for peaks, e.g. (30, 40).
+    top_n_peaks : int
+        Number of top peaks to report inside peak_band.
+    use_semilogy : bool
+        If True, plot PSD on log scale.
+    figsize : tuple[int, int]
+        Figure size.
+    strict_checks : bool
+        If True, enforce equal fs / channels / samples when comparing two NPZs.
+
+    Returns
+    -------
+    results : dict
+        Dictionary with PSDs, frequencies, metadata, and detected peaks.
+    """
+
+    def _load_npz_signal(npz_path: str):
+        data = np.load(npz_path, allow_pickle=True)
+
+        # Detect signal key and orientation
+        if "signal" in data:
+            sig = data["signal"]  # usually (N, C)
+            if sig.ndim != 2:
+                raise ValueError(f"'signal' in {npz_path} is not 2D.")
+            # convert to (C, N)
+            if sig.shape[0] > sig.shape[1]:
+                # probably (N, C)
+                sig = sig.T
+            signal_key = "signal"
+
+            channel_names = data["channels"] if "channels" in data else np.array(
+                [f"ch_{i}" for i in range(sig.shape[0])]
+            )
+
+        elif "X" in data:
+            sig = data["X"]  # usually (C, N)
+            if sig.ndim != 2:
+                raise ValueError(f"'X' in {npz_path} is not 2D.")
+            # keep as (C, N), but if suspicious shape, try transpose
+            if sig.shape[0] > sig.shape[1]:
+                # unlikely for EEG channels > samples, but guard anyway
+                pass
+            signal_key = "X"
+
+            channel_names = data["channel_names"] if "channel_names" in data else np.array(
+                [f"ch_{i}" for i in range(sig.shape[0])]
+            )
+        else:
+            raise KeyError(
+                f"Could not find signal array in {npz_path}. Expected 'signal' or 'X'."
+            )
+
+        if "fs" not in data:
+            raise KeyError(f"'fs' not found in {npz_path}.")
+
+        fs = float(data["fs"])
+
+        if channel >= sig.shape[0]:
+            raise IndexError(
+                f"Requested channel={channel}, but file {npz_path} has only {sig.shape[0]} channels."
+            )
+
+        channel_names = np.array(channel_names)
+        return {
+            "path": npz_path,
+            "data": data,
+            "signal": sig,
+            "signal_key": signal_key,
+            "fs": fs,
+            "channel_names": channel_names,
+            "n_channels": sig.shape[0],
+            "n_samples": sig.shape[1],
+        }
+
+    def _compute_welch(sig_1d: np.ndarray, fs: float, nperseg_sec: float, overlap_frac: float):
+        nperseg = max(8, int(fs * nperseg_sec))
+        noverlap = int(nperseg * overlap_frac)
+
+        if noverlap >= nperseg:
+            raise ValueError("overlap_frac produces noverlap >= nperseg.")
+
+        # If signal is shorter than nperseg, shrink nperseg
+        if len(sig_1d) < nperseg:
+            nperseg = len(sig_1d)
+            noverlap = int(nperseg * overlap_frac)
+            if noverlap >= nperseg and nperseg > 1:
+                noverlap = nperseg - 1
+
+        f, pxx = welch(
+            sig_1d,
+            fs=fs,
+            nperseg=nperseg,
+            noverlap=noverlap,
+            scaling="density"
+        )
+        return f, pxx, nperseg, noverlap
+
+    def _find_top_peaks_in_band(f: np.ndarray, pxx: np.ndarray, band: tuple[float, float], top_n: int):
+        fmin, fmax = band
+        mask = (f >= fmin) & (f <= fmax)
+
+        if not np.any(mask):
+            return []
+
+        f_band = f[mask]
+        pxx_band = pxx[mask]
+
+        if len(f_band) == 0:
+            return []
+
+        idx_sorted = np.argsort(pxx_band)[::-1]
+        peaks = []
+        used_freqs = set()
+
+        for idx in idx_sorted:
+            freq = float(f_band[idx])
+            power = float(pxx_band[idx])
+
+            # simple guard against returning the exact same bin twice
+            if freq in used_freqs:
+                continue
+
+            peaks.append({"freq_hz": freq, "power": power})
+            used_freqs.add(freq)
+
+            if len(peaks) >= top_n:
+                break
+
+        return peaks
+
+    # -------------------------
+    # Load first file
+    # -------------------------
+    d1 = _load_npz_signal(npz_path_1)
+    sig1 = d1["signal"][channel, :]
+    fs1 = d1["fs"]
+
+    f1, pxx1, nperseg1, noverlap1 = _compute_welch(sig1, fs1, nperseg_sec, overlap_frac)
+
+    # -------------------------
+    # Optional second file
+    # -------------------------
+    d2 = None
+    f2 = pxx2 = None
+
+    if npz_path_2 is not None:
+        d2 = _load_npz_signal(npz_path_2)
+        sig2 = d2["signal"][channel, :]
+        fs2 = d2["fs"]
+
+        if strict_checks:
+            if not np.isclose(fs1, fs2):
+                raise ValueError(f"Sampling frequency mismatch: fs1={fs1}, fs2={fs2}")
+            if d1["n_channels"] != d2["n_channels"]:
+                raise ValueError(
+                    f"Channel count mismatch: {d1['n_channels']} vs {d2['n_channels']}"
+                )
+            if d1["n_samples"] != d2["n_samples"]:
+                raise ValueError(
+                    f"Sample count mismatch: {d1['n_samples']} vs {d2['n_samples']}"
+                )
+
+        f2, pxx2, nperseg2, noverlap2 = _compute_welch(sig2, fs2, nperseg_sec, overlap_frac)
+
+    # -------------------------
+    # Peaks
+    # -------------------------
+    peaks_1 = []
+    peaks_2 = []
+
+    if peak_band is not None:
+        peaks_1 = _find_top_peaks_in_band(f1, pxx1, peak_band, top_n_peaks)
+        if d2 is not None:
+            peaks_2 = _find_top_peaks_in_band(f2, pxx2, peak_band, top_n_peaks)
+
+    # -------------------------
+    # Plot limits
+    # -------------------------
+    nyquist_1 = fs1 / 2
+    nyquist_2 = d2["fs"] / 2 if d2 is not None else None
+    max_possible_freq = min([x for x in [nyquist_1, nyquist_2] if x is not None])
+
+    if xlim is None:
+        plot_xlim = (0, max_possible_freq)
+    else:
+        xmin, xmax = xlim
+        plot_xlim = (xmin, min(xmax, max_possible_freq))
+        if xmax > max_possible_freq:
+            print(
+                f"[INFO] Requested xmax={xmax:.2f} Hz, but max possible is {max_possible_freq:.2f} Hz "
+                f"(Nyquist). Using xmax={plot_xlim[1]:.2f} Hz instead."
+            )
+
+    # -------------------------
+    # Plot
+    # -------------------------
+    plt.figure(figsize=figsize)
+
+    label1 = f"{d1['path'].split('/')[-1]} | ch={d1['channel_names'][channel]}"
+    if use_semilogy:
+        plt.semilogy(f1, pxx1, label=label1)
+    else:
+        plt.plot(f1, pxx1, label=label1)
+
+    if d2 is not None:
+        label2 = f"{d2['path'].split('/')[-1]} | ch={d2['channel_names'][channel]}"
+        if use_semilogy:
+            plt.semilogy(f2, pxx2, label=label2)
+        else:
+            plt.plot(f2, pxx2, label=label2)
+
+    # Mark peaks
+    if peak_band is not None:
+        for i, pk in enumerate(peaks_1, start=1):
+            plt.axvline(pk["freq_hz"], linestyle="--", alpha=0.7)
+            print(f"[NPZ1] Peak {i} in band {peak_band}: {pk['freq_hz']:.4f} Hz | PSD={pk['power']:.6e}")
+
+        for i, pk in enumerate(peaks_2, start=1):
+            plt.axvline(pk["freq_hz"], linestyle=":", alpha=0.7)
+            print(f"[NPZ2] Peak {i} in band {peak_band}: {pk['freq_hz']:.4f} Hz | PSD={pk['power']:.6e}")
+
+    plt.xlim(*plot_xlim)
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("PSD")
+    plt.title(f"Welch PSD - channel {channel}")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    # -------------------------
+    # Summary prints
+    # -------------------------
+    print("\n--- FILE 1 INFO ---")
+    print("path:", d1["path"])
+    print("signal key:", d1["signal_key"])
+    print("signal shape (C, N):", d1["signal"].shape)
+    print("fs:", d1["fs"])
+    print("channel names:", d1["channel_names"])
+    print("nperseg:", nperseg1)
+    print("noverlap:", noverlap1)
+    print("nyquist:", nyquist_1)
+
+    if d2 is not None:
+        print("\n--- FILE 2 INFO ---")
+        print("path:", d2["path"])
+        print("signal key:", d2["signal_key"])
+        print("signal shape (C, N):", d2["signal"].shape)
+        print("fs:", d2["fs"])
+        print("channel names:", d2["channel_names"])
+        print("nperseg:", nperseg2)
+        print("noverlap:", noverlap2)
+        print("nyquist:", nyquist_2)
+
+    return {
+        "file1": {
+            "path": d1["path"],
+},
+        "file2": None if d2 is None else {
+            "path": d2["path"],
+            "fs": d2["fs"],
+            "channel_names": d2["channel_names"],
+            "f": f2,
+            "pxx": pxx2,
+            "peaks_in_band": peaks_2,
+        },
+    }
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# FUNCTION #13
+
+
+def analyze_peak_in_npz_folder_1_13(
+    input_dir: str,
+    pattern: str = "*.npz",
+    band: tuple[float, float] = (30.0, 40.0),
+    target_freq: float = 35.0,
+    tolerance_hz: float = 1.0,
+    nperseg_sec: float = 20.0,
+    overlap_frac: float = 0.5,
+    baseline_exclusion_hz: float = 1.0,
+    ratio_threshold: float = 3.0,
+    save_csv_path: str | None = None,
+):
+    """
+    Analyze whether NPZ files show a stable high PSD peak near 35 Hz.
+
+    Supported NPZ formats
+    ---------------------
+    Raw-style:
+        signal : (N, C)
+        fs
+        channels
+    Processed-style:
+        X : (C, N)
+        fs
+        channel_names
+
+    Parameters
+    ----------
+    input_dir : str
+        Folder containing NPZ files.
+    pattern : str
+        Glob pattern for files.
+    band : tuple
+        Frequency band in which to search peaks, e.g. (30, 40).
+    target_freq : float
+        Frequency of interest, e.g. 35 Hz.
+    tolerance_hz : float
+        Peak considered "near target" if abs(peak_freq - target_freq) <= tolerance_hz.
+    nperseg_sec : float
+        Welch window length in seconds.
+    overlap_frac : float
+        Welch overlap fraction.
+    baseline_exclusion_hz : float
+        Exclude ± this range around peak when computing local baseline.
+    ratio_threshold : float
+        Threshold for flagging "high peak" based on peak/local_baseline ratio.
+    save_csv_path : str | None
+        Optional path to save results CSV.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        One row per file per channel.
+    summary : dict
+        Aggregate statistics.
+    """
+
+    def _load_npz_signal(npz_path: str):
+        data = np.load(npz_path, allow_pickle=True)
+
+        if "signal" in data:
+            sig = data["signal"]  # usually (N, C)
+            if sig.ndim != 2:
+                raise ValueError(f"{npz_path}: 'signal' is not 2D")
+            if sig.shape[0] > sig.shape[1]:
+                sig = sig.T  # -> (C, N)
+            else:
+                # if already (C, N), keep
+                pass
+            channel_names = data["channels"] if "channels" in data else np.array(
+                [f"ch_{i}" for i in range(sig.shape[0])]
+            )
+            signal_key = "signal"
+
+        elif "X" in data:
+            sig = data["X"]  # usually (C, N)
+            if sig.ndim != 2:
+                raise ValueError(f"{npz_path}: 'X' is not 2D")
+            channel_names = data["channel_names"] if "channel_names" in data else np.array(
+                [f"ch_{i}" for i in range(sig.shape[0])]
+            )
+            signal_key = "X"
+
+        else:
+            raise KeyError(f"{npz_path}: expected 'signal' or 'X' key")
+
+        if "fs" not in data:
+            raise KeyError(f"{npz_path}: missing 'fs'")
+
+        fs = float(data["fs"])
+
+        return sig, fs, np.array(channel_names), signal_key
+
+    def _compute_welch(sig_1d: np.ndarray, fs: float):
+        nperseg = max(8, int(fs * nperseg_sec))
+        noverlap = int(nperseg * overlap_frac)
+
+        if len(sig_1d) < nperseg:
+            nperseg = len(sig_1d)
+            noverlap = min(int(nperseg * overlap_frac), max(0, nperseg - 1))
+
+        f, pxx = welch(
+            sig_1d,
+            fs=fs,
+            nperseg=nperseg,
+            noverlap=noverlap,
+            scaling="density"
+        )
+        return f, pxx
+
+    def _analyze_channel(f: np.ndarray, pxx: np.ndarray):
+        fmin, fmax = band
+        band_mask = (f >= fmin) & (f <= fmax)
+
+        if not np.any(band_mask):
+            return None
+
+        f_band = f[band_mask]
+        pxx_band = pxx[band_mask]
+
+        if len(f_band) == 0:
+            return None
+
+        peak_idx = np.argmax(pxx_band)
+        peak_freq = float(f_band[peak_idx])
+        peak_power = float(pxx_band[peak_idx])
+
+        # Local baseline excluding area around the peak
+        baseline_mask = np.abs(f_band - peak_freq) > baseline_exclusion_hz
+        baseline_vals = pxx_band[baseline_mask]
+
+        if len(baseline_vals) == 0:
+            local_baseline = np.nan
+            peak_ratio = np.nan
+        else:
+            local_baseline = float(np.median(baseline_vals))
+            peak_ratio = float(peak_power / local_baseline) if local_baseline > 0 else np.nan
+
+        near_target = abs(peak_freq - target_freq) <= tolerance_hz
+        high_peak = (peak_ratio >= ratio_threshold) if not np.isnan(peak_ratio) else False
+
+        return {
+            "peak_freq_hz": peak_freq,
+            "peak_power": peak_power,
+            "local_baseline_power": local_baseline,
+            "peak_to_baseline_ratio": peak_ratio,
+            "near_target": near_target,
+            "high_peak": high_peak,
+        }
+
+    npz_files = sorted(glob.glob(os.path.join(input_dir, pattern)))
+    if len(npz_files) == 0:
+        raise FileNotFoundError(f"No files found in {input_dir} matching pattern '{pattern}'")
+
+    rows = []
+
+    for npz_path in npz_files:
+        try:
+            sig, fs, channel_names, signal_key = _load_npz_signal(npz_path)
+        except Exception as e:
+            rows.append({
+                "file": os.path.basename(npz_path),
+                "file_path": npz_path,
+                "status": f"load_error: {e}",
+            })
+            continue
+
+        nyquist = fs / 2
+        if band[1] > nyquist:
+            rows.append({
+                "file": os.path.basename(npz_path),
+                "file_path": npz_path,
+                "status": f"skipped_band_above_nyquist ({band[1]} > {nyquist:.2f})",
+                "fs": fs,
+            })
+            continue
+
+        for ch in range(sig.shape[0]):
+            try:
+                sig_ch = sig[ch, :]
+                f, pxx = _compute_welch(sig_ch, fs)
+                metrics = _analyze_channel(f, pxx)
+
+                if metrics is None:
+                    rows.append({
+                        "file": os.path.basename(npz_path),
+                        "file_path": npz_path,
+                        "signal_key": signal_key,
+                        "fs": fs,
+                        "channel_idx": ch,
+                        "channel_name": str(channel_names[ch]),
+                        "status": "no_band_data",
+                    })
+                    continue
+
+                rows.append({
+                    "file": os.path.basename(npz_path),
+                    "file_path": npz_path,
+                    "signal_key": signal_key,
+                    "fs": fs,
+                    "channel_idx": ch,
+                    "channel_name": str(channel_names[ch]),
+                    "status": "ok",
+                    **metrics
+                })
+
+            except Exception as e:
+                rows.append({
+                    "file": os.path.basename(npz_path),
+                    "file_path": npz_path,
+                    "signal_key": signal_key,
+                    "fs": fs,
+                    "channel_idx": ch,
+                    "channel_name": str(channel_names[ch]) if ch < len(channel_names) else f"ch_{ch}",
+                    "status": f"channel_error: {e}",
+                })
+
+    df = pd.DataFrame(rows)
+
+    df_ok = df[df["status"] == "ok"].copy()
+
+    if len(df_ok) == 0:
+        summary = {
+            "n_files": len(npz_files),
+            "n_valid_rows": 0,
+            "message": "No valid channel analyses were produced."
+        }
+    else:
+        summary = {
+            "n_files": len(npz_files),
+            "n_valid_rows": int(len(df_ok)),
+            "n_unique_files_analyzed": int(df_ok["file"].nunique()),
+            "n_unique_channels": int(df_ok[["file", "channel_idx"]].drop_duplicates().shape[0]),
+            "target_freq_hz": target_freq,
+            "tolerance_hz": tolerance_hz,
+            "band": band,
+            "ratio_threshold": ratio_threshold,
+            "pct_near_target": float(100 * df_ok["near_target"].mean()),
+            "pct_high_peak": float(100 * df_ok["high_peak"].mean()),
+            "pct_near_target_and_high_peak": float(
+                100 * ((df_ok["near_target"]) & (df_ok["high_peak"])).mean()
+            ),
+            "median_peak_freq_hz": float(df_ok["peak_freq_hz"].median()),
+            "mean_peak_freq_hz": float(df_ok["peak_freq_hz"].mean()),
+            "std_peak_freq_hz": float(df_ok["peak_freq_hz"].std(ddof=1)) if len(df_ok) > 1 else 0.0,
+            "median_peak_ratio": float(df_ok["peak_to_baseline_ratio"].median()),
+            "mean_peak_ratio": float(df_ok["peak_to_baseline_ratio"].mean()),
+            "std_peak_ratio": float(df_ok["peak_to_baseline_ratio"].std(ddof=1)) if len(df_ok) > 1 else 0.0,
+        }
+
+    if save_csv_path is not None:
+        df.to_csv(save_csv_path, index=False)
+
+    return df, summary
+
+
+
+
+#=================================================================================
+#=================================================================================
+#=================================================================================
+
+# FUNCTION #14
+def sanity_check_global_zscore_npz_1_14(
+    original_dir: str,
+    normalized_dir: str,
+    pattern: str = "*.npz",
+    atol: float = 1e-5,
+    rtol: float = 1e-5,
+):
+    """
+    Sanity check for globally normalized EEG NPZ files.
+
+    Checks:
+    1. Original and normalized files exist with matching names
+    2. Required keys exist
+    3. Shapes match
+    4. Recomputed z-score matches saved normalized X
+    5. Reports per-file stats for inspection
+
+    Parameters
+    ----------
+    original_dir : str
+        Directory containing original NPZ files.
+    normalized_dir : str
+        Directory containing normalized NPZ files.
+    pattern : str
+        Glob pattern for NPZ files.
+    atol : float
+        Absolute tolerance for np.allclose.
+    rtol : float
+        Relative tolerance for np.allclose.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        Summary table with pass/fail and useful stats.
+    """
+    original_dir = Path(original_dir)
+    normalized_dir = Path(normalized_dir)
+
+    original_files = sorted(original_dir.glob(pattern))
+    rows = []
+
+    required_norm_keys = {"X", "global_mu", "global_sigma", "eps"}
+
+    for orig_path in original_files:
+        norm_path = normalized_dir / orig_path.name
+
+        row = {
+            "file": orig_path.name,
+            "original_exists": orig_path.exists(),
+            "normalized_exists": norm_path.exists(),
+            "shape_original": None,
+            "shape_normalized": None,
+            "same_shape": False,
+            "has_required_keys": False,
+            "all_finite_original": False,
+            "all_finite_normalized": False,
+            "zscore_recomputed_match": False,
+            "max_abs_diff": np.nan,
+            "mean_norm_ch0": np.nan,
+            "std_norm_ch0": np.nan,
+            "mean_norm_ch1": np.nan,
+            "std_norm_ch1": np.nan,
+            "status": "fail",
+            "reason": "",
+        }
+
+        try:
+            if not norm_path.exists():
+                row["reason"] = "normalized file missing"
+                rows.append(row)
+                continue
+
+            orig = np.load(orig_path, allow_pickle=True)
+            norm = np.load(norm_path, allow_pickle=True)
+
+            if "X" not in orig:
+                row["reason"] = "original missing X"
+                rows.append(row)
+                continue
+
+            norm_keys = set(norm.files)
+            row["has_required_keys"] = required_norm_keys.issubset(norm_keys)
+            if not row["has_required_keys"]:
+                row["reason"] = f"normalized missing keys: {required_norm_keys - norm_keys}"
+                rows.append(row)
+                continue
+
+            X_orig = orig["X"]
+            X_norm = norm["X"]
+            global_mu = norm["global_mu"]
+            global_sigma = norm["global_sigma"]
+            eps = float(norm["eps"])
+
+            row["shape_original"] = tuple(X_orig.shape)
+            row["shape_normalized"] = tuple(X_norm.shape)
+            row["same_shape"] = X_orig.shape == X_norm.shape
+
+            if not row["same_shape"]:
+                row["reason"] = "shape mismatch"
+                rows.append(row)
+                continue
+
+            row["all_finite_original"] = bool(np.all(np.isfinite(X_orig)))
+            row["all_finite_normalized"] = bool(np.all(np.isfinite(X_norm)))
+
+            if global_mu.shape[0] != X_orig.shape[0]:
+                row["reason"] = "global_mu length does not match n_channels"
+                rows.append(row)
+                continue
+
+            if global_sigma.shape[0] != X_orig.shape[0]:
+                row["reason"] = "global_sigma length does not match n_channels"
+                rows.append(row)
+                continue
+
+            # Recompute z-score from original using saved global stats
+            X_recomputed = np.empty_like(X_orig, dtype=np.float32)
+            for c in range(X_orig.shape[0]):
+                X_recomputed[c] = (X_orig[c] - global_mu[c]) / (global_sigma[c] + eps)
+
+            diff = np.abs(X_recomputed - X_norm)
+            row["max_abs_diff"] = float(np.max(diff))
+            row["zscore_recomputed_match"] = bool(
+                np.allclose(X_recomputed, X_norm, atol=atol, rtol=rtol)
+            )
+
+            # Useful descriptive stats
+            if X_norm.shape[0] > 0:
+                row["mean_norm_ch0"] = float(np.mean(X_norm[0]))
+                row["std_norm_ch0"] = float(np.std(X_norm[0]))
+            if X_norm.shape[0] > 1:
+                row["mean_norm_ch1"] = float(np.mean(X_norm[1]))
+                row["std_norm_ch1"] = float(np.std(X_norm[1]))
+
+            if row["zscore_recomputed_match"]:
+                row["status"] = "pass"
+            else:
+                row["reason"] = "saved normalized X does not match recomputed z-score"
+
+        except Exception as e:
+            row["reason"] = str(e)
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+
+    print("\n=== Sanity Check Summary ===")
+    print(df["status"].value_counts(dropna=False))
+
+    n_fail = (df["status"] != "pass").sum()
+    if n_fail > 0:
+        print("\nFailed files:")
+        print(df.loc[df["status"] != "pass", ["file", "reason"]].to_string(index=False))
+
+    return df
+
+    
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -1381,456 +2464,13 @@ def plot_eeg_availability_with_onsets(
 # archivo_a_cargar = primera_convulsion['file_name']
 # momento_exacto = primera_convulsion['onset']
 ##
+
+
+
+
+
+
+
+
+
 ##---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-##
-
-def plot_recording_availability_per_day(
-    df_intervals: pd.DataFrame,
-    df_seizures: pd.DataFrame = None,
-    save_path: str = None,
-    seizure_column: str = "onset"
-):
-    """
-    Plot EEG recording availability per day as a binary step signal (1 = recording,
-    0 = no recording). Optionally overlays seizure onset times as vertical lines.
-
-    Parameters
-    ----------
-    df_intervals : pandas.DataFrame
-        Must contain columns:
-            - "T0" (recording start datetime)
-            - "TF" (recording end datetime)
-
-    df_seizures : pandas.DataFrame, optional
-        DataFrame containing seizure timestamps.
-        Must contain column specified by seizure_column.
-
-    save_path : str, optional
-        If provided, figure will be saved to this path.
-
-    seizure_column : str, optional
-        Name of the column in df_seizures containing seizure timestamps.
-        Default = "onset".
-
-    Returns
-    -------
-    None
-    """
-
-    # Ensure datetime format
-    df = df_intervals.copy()
-    df["T0"] = pd.to_datetime(df["T0"])
-    df["TF"] = pd.to_datetime(df["TF"])
-
-    # --- Create start/end events ---
-    events = []
-
-    for _, row in df.iterrows():
-        events.append((row["T0"], 1))  # recording starts
-        events.append((row["TF"], 0))  # recording ends
-
-    events_df = pd.DataFrame(events, columns=["Time", "Presence"])
-    events_df = events_df.sort_values("Time")
-
-    # Extract unique days
-    events_df["Date"] = events_df["Time"].dt.date
-    unique_days = events_df["Date"].unique()
-
-    # Create one subplot per day
-    fig, axes = plt.subplots(
-        len(unique_days),
-        1,
-        figsize=(14, 3 * len(unique_days)),
-        sharey=True
-    )
-
-    # If only one day, make axes iterable
-    if len(unique_days) == 1:
-        axes = [axes]
-
-    for ax, day in zip(axes, unique_days):
-
-        day_data = events_df[events_df["Date"] == day]
-
-        ax.step(day_data["Time"], day_data["Presence"], where="post")
-
-        ax.set_ylim(-0.1, 1.1)
-        ax.set_ylabel("Presence")
-        ax.set_title(f"Date: {day}")
-
-        start_day = pd.Timestamp(day)
-        end_day = start_day + pd.Timedelta(days=1)
-        ax.set_xlim(start_day, end_day)
-
-        # --- Overlay seizure onset markers if provided ---
-        if df_seizures is not None and seizure_column in df_seizures.columns:
-
-            df_seiz = df_seizures.copy()
-            df_seiz[seizure_column] = pd.to_datetime(df_seiz[seizure_column])
-
-            day_seizures = df_seiz[
-                (df_seiz[seizure_column] >= start_day) &
-                (df_seiz[seizure_column] < end_day)
-            ]
-
-            for event_time in day_seizures[seizure_column]:
-                ax.axvline(
-                    event_time,
-                    color="red",
-                    linestyle="--",
-                    linewidth=1.5
-                )
-
-    axes[-1].set_xlabel("Time")
-
-    plt.suptitle("EEG Recording Availability Per Day")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    plt.show()
-# EXAMPLE
-#plot_recording_availability_per_day(
-#    df_intervals=df_intervals,
-#    df_seizures=df_sqEEG,
-#    save_path="/home/tperezsanchez/FoundationModel_EEG_Dissertation/EEG_data_vis/results/XB47Y_EEG_recording_availability_per_dayONSET.png"
-#)
-
-def build_eeg_array_from_mat(
-    hdr,
-    mat_data,
-    output_dir=".",
-    file_prefix="EEG_data",
-    save_format="npz",   # "npy" or "npz"
-    return_dataframe=True
-):
-    """
-    Build EEG array from .mat structure and save as .npy or .npz.
-
-    Parameters
-    ----------
-    hdr : dict
-        Header structure from .mat file
-    mat_data : dict
-        Full .mat dictionary
-    output_dir : str
-        Directory to save output
-    file_prefix : str
-        Prefix for output filename
-    save_format : str
-        "npy" (signal only) or "npz" (signal + metadata)
-    return_dataframe : bool
-        If True, also returns a DataFrame
-
-    Returns
-    -------
-    signal : np.ndarray
-    file_path : str
-    (optional) EEG_Table : pandas.DataFrame
-    """
-
-    # Sampling frequency
-    fs = float(hdr['Fs'][0,0])
-
-    # Channel labels
-    channels_raw = hdr['label'][0,0]
-    channels = [str(row[0][0]) for row in channels_raw]
-
-    # Extract signal
-    signal = np.asarray(mat_data['data'], dtype=np.float32)
-
-    # Fix orientation if needed
-    if signal.shape[1] != len(channels) and signal.shape[0] == len(channels):
-        signal = signal.T
-
-    n_samples = signal.shape[0]
-    time = np.arange(n_samples, dtype=np.float32) / fs
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    # -------- SAVE --------
-    if save_format == "npy":
-        file_path = os.path.join(output_dir, f"{file_prefix}.npy")
-        np.save(file_path, signal)
-
-    elif save_format == "npz":
-        file_path = os.path.join(output_dir, f"{file_prefix}.npz")
-        np.savez(
-            file_path,
-            signal=signal,
-            fs=fs,
-            channels=channels,
-            time=time
-        )
-
-    else:
-        raise ValueError("save_format must be 'npy' or 'npz'")
-
-    print(f"Saved EEG data to: {file_path}")
-    print(f"Shape: {signal.shape}")
-    print(f"Sampling frequency: {fs} Hz")
-
-    if return_dataframe:
-        EEG_Table = pd.DataFrame(signal, columns=channels)
-        EEG_Table.insert(0, "Time", time)
-        return signal, file_path, EEG_Table
-
-    return signal, file_path
-
-def apply_amplitude_cutoff(
-    EEG_Table: pd.DataFrame,
-    threshold: float = 200,
-    start_sec: float = None,
-    end_sec: float = None
-):
-    """
-    Clip EEG amplitudes at ±threshold (µV),
-    optionally selecting a time window in seconds.
-
-    Parameters
-    ----------
-    EEG_Table : pandas.DataFrame
-        DataFrame containing 'Time' column OR time as index (in seconds)
-    threshold : float
-        Amplitude threshold in µV (default 200)
-    start_sec : float, optional
-        Start time of window (in seconds)
-    end_sec : float, optional
-        End time of window (in seconds)
-
-    Returns
-    -------
-    EEG_clipped : pandas.DataFrame
-        Windowed and clipped DataFrame
-    """
-
-    # Copiar para no modificar original
-    EEG_clipped = EEG_Table.copy()
-
-    # ---------------------------------------------------
-    # 1) Selección de ventana temporal (si se especifica)
-    # ---------------------------------------------------
-    if start_sec is not None and end_sec is not None:
-
-        if "Time" in EEG_clipped.columns:
-            EEG_clipped = EEG_clipped[
-                (EEG_clipped["Time"] >= start_sec) &
-                (EEG_clipped["Time"] <= end_sec)
-            ]
-        else:
-            EEG_clipped = EEG_clipped.loc[
-                (EEG_clipped.index >= start_sec) &
-                (EEG_clipped.index <= end_sec)
-            ]
-
-    # ---------------------------------------------------
-    # 2) Aplicar clipping
-    # ---------------------------------------------------
-    if "Time" in EEG_clipped.columns:
-        signal_cols = EEG_clipped.columns.drop("Time")
-        EEG_clipped[signal_cols] = EEG_clipped[signal_cols].clip(
-            lower=-threshold,
-            upper=threshold
-        )
-    else:
-        EEG_clipped = EEG_clipped.clip(
-            lower=-threshold,
-            upper=threshold
-        )
-
-    return EEG_clipped
-import matplotlib.pyplot as plt
-
-def plot_eeg_with_shaded_threshold(
-    EEG_Table,
-    threshold=200,          # µV
-    time_window=None,
-    figsize=(12,6)
-):
-    """
-    Plot EEG signals with grey shaded region between ±threshold (µV).
-
-    Parameters
-    ----------
-    EEG_Table : pandas.DataFrame
-        Must contain 'Time' column
-    threshold : float
-        Amplitude threshold in µV (default 200)
-    time_window : tuple or None
-        (start_time, end_time) in seconds
-    figsize : tuple
-        Figure size
-    """
-
-    # Apply time window if provided
-    if time_window is not None:
-        start, end = time_window
-        EEG_Table = EEG_Table[
-            (EEG_Table["Time"] >= start) &
-            (EEG_Table["Time"] <= end)
-        ]
-
-    EEG_TimeTable = EEG_Table.set_index("Time")
-
-    fig, axes = plt.subplots(
-        nrows=EEG_TimeTable.shape[1],
-        ncols=1,
-        sharex=True,
-        figsize=figsize
-    )
-
-    # If only one channel
-    if EEG_TimeTable.shape[1] == 1:
-        axes = [axes]
-
-    for ax, channel in zip(axes, EEG_TimeTable.columns):
-
-        # Plot signal
-        ax.plot(EEG_TimeTable.index, EEG_TimeTable[channel])
-
-        # Grey shaded region between ±threshold
-        ax.axhspan(-threshold, threshold, alpha=0.15)
-
-        # Horizontal lines at ±threshold
-        ax.axhline(threshold, linestyle="--")
-        ax.axhline(-threshold, linestyle="--")
-
-        ax.set_ylabel(channel)
-
-    axes[-1].set_xlabel("Time (s)")
-    plt.tight_layout()
-    plt.show()
-import matplotlib.pyplot as plt
-
-def plot_eeg_signals(
-    EEG_Table,
-    time_window=None,      # tuple (start, end) in seconds
-    y_limit=None,          # tuple (-200, 200)
-    figsize=(12,6),
-    color=None             # str or list of colors
-):
-    """
-    Plot EEG signals from a DataFrame with Time column.
-
-    Parameters
-    ----------
-    EEG_Table : pandas.DataFrame
-        DataFrame containing 'Time' + EEG channels
-    time_window : tuple or None
-        (start_time, end_time) in seconds
-    y_limit : tuple or None
-        (ymin, ymax)
-    figsize : tuple
-        Figure size
-    color : str or list
-        Single color for all channels OR list of colors per channel
-    """
-
-    # Apply time window if provided
-    if time_window is not None:
-        start, end = time_window
-        EEG_Table = EEG_Table[
-            (EEG_Table["Time"] >= start) &
-            (EEG_Table["Time"] <= end)
-        ]
-
-    EEG_TimeTable = EEG_Table.set_index("Time")
-
-    fig, axes = plt.subplots(
-        nrows=EEG_TimeTable.shape[1],
-        ncols=1,
-        sharex=True,
-        figsize=figsize
-    )
-
-    if EEG_TimeTable.shape[1] == 1:
-        axes = [axes]
-
-    for i, (ax, channel) in enumerate(zip(axes, EEG_TimeTable.columns)):
-
-        # Select color
-        if isinstance(color, list):
-            plot_color = color[i] if i < len(color) else None
-        else:
-            plot_color = color
-
-        ax.plot(
-            EEG_TimeTable.index,
-            EEG_TimeTable[channel],
-            color=plot_color
-        )
-
-        ax.set_ylabel(channel)
-
-        if y_limit is not None:
-            ax.set_ylim(y_limit)
-
-    axes[-1].set_xlabel("Time (s)")
-    plt.tight_layout()
-    plt.show()
-import numpy as np
-import pandas as pd
-from scipy.signal import butter, sosfiltfilt
-
-
-def process_eeg_windows(
-    EEG_Table,
-    window_size=10,
-    threshold=200,
-    lowcut=0.5,
-    highcut=40,
-    order=4,
-    base_name="",
-    plots_dir=""
-):
-    start_time = EEG_Table["Time"].min()
-    end_time = EEG_Table["Time"].max()
-
-    current_start = start_time
-    colors = ["steelblue", "darkorange"]
-    color_idx = 0
-
-    while current_start + window_size <= end_time + 0.1:
-        current_end = current_start + window_size
-
-        # 1. Extraer el segmento de tiempo actual
-        df_segment = EEG_Table[(EEG_Table["Time"] >= current_start) & (EEG_Table["Time"] <= current_end)].copy()
-        
-        if df_segment.empty:
-            current_start += window_size
-            continue
-
-        # 2. Filtro Bandpass (usando TEEG directamente)
-        df_win_idx = df_segment.set_index("Time")
-        df_win_filt, fs = TEEG.bandpass_filter_eegwin(
-            df_win_idx, lowcut=lowcut, highcut=highcut, order=order
-        )
-
-        # 3. Aplicar Cutoff
-        df_final = TEEG.apply_amplitude_cutoff(
-            df_win_filt.reset_index(), 
-            threshold=threshold, 
-            start_sec=current_start, 
-            end_sec=current_end
-        )
-
-        # 4. Graficar
-        plt.figure(figsize=(15, 7))
-        TEEG.plot_eeg_signals(
-            df_final, 
-            color=colors[color_idx]
-        )
-        
-        plt.title(f"Archivo: {base_name} | Ventana: {current_start:.1f}-{current_end:.1f}s")
-        plt.xlabel("Tiempo (s)")
-        plt.tight_layout()
-        
-        # Guardar gráfico de la ventana
-        plot_filename = f"{base_name}_win_{int(current_start)}.png"
-        plt.savefig(os.path.join(plots_dir, plot_filename), dpi=150)
-        plt.close() 
-
-        # Alternar color y avanzar
-        color_idx = 1 - color_idx
-        current_start += window_size
