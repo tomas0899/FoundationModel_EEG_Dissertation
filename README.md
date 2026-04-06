@@ -1,7 +1,7 @@
 # EEG Foundation Model for Seizure Forecasting  
 MSc Dissertation – Applied Bioinformatics  
 King’s College London  
-
+Work in progress...
 ---
 
 ## 1. Motivation
