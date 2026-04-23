@@ -5,7 +5,7 @@ EEG_data_vis/code/.ipynb_checkpoints/
 # Data
 .ipynb_checkpoints/
 *.html
-FoundationModel_EEG_Dissertation/EEG_data_vis/data/
+FoundationModel_EEG_Dissertation/Main_project/data/
 *.csv
 *.mat
 *.npy
@@ -18,15 +18,15 @@ FoundationModel_EEG_Dissertation/EEG_data_vis/data/
 *.pth
 
 # Logs
-FoundationModel_EEG_Dissertation/EEG_data_vis/logs/
-FoundationModel_EEG_Dissertation/EEG_data_vis/results/
-EEG_data_vis/results
-EEG_data_vis/data
+FoundationModel_EEG_Dissertation/Main_project/logs/
+FoundationModel_EEG_Dissertation/Main_project/results/
+Main_project/results
+Main_project/data
 # Env
 .env
 .mamba/
-EEG_data_vis/code/plots_html/
+Main_project/code/plots_html/
 .ipynb_checkpoints/
 
-EEG_data_vis/code/plots_html/
+Main_project/code/plots_html/
 .ipynb_checkpoints/
