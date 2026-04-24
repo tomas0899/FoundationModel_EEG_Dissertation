@@ -45,13 +45,13 @@ config = {
         "seizure_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/XB47Y_seizures.xlsx",
 
         # Output path for the seizure availability map plot
-        "map_output_path": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_MAPWITHSEIZ.png",
+        "map_output_path": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_CONFIG_24042026MAPWITHSEIZ.png",
 
         # Output directory where generated .npz files will be saved
-        "npz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_test_pipeline_24042026/",
+        "npz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47YConfig_test_pipeline_24042026/",
 
         # Output directory where seizure-window visualizations will be saved
-        "viz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/seizure_pipelinetest_NOT_normalized24042026"
+        "viz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/seizureCONFIG_pipeline_test_NOT_normalized24042026"
     },
 
     # ------------------------------------------------------

@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import json
+import pandas as pd
 #==========================
 #==========================
 #==========================
@@ -69,6 +70,12 @@ pre_onset_sec = config["plotting"]["pre_onset_sec"]
 vertical_offset_uv = config["plotting"]["vertical_offset_uv"]
 
 target_date = config["inspection"]["target_date"]
+print("Config loaded successfully")
+print("patient_id:", patient_id)
+print("input_dir:", input_dir)
+print("seizure_file:", seizure_file)
+print("npz_output_dir:", npz_output_dir)
+print("viz_output_dir:", viz_output_dir)
 #==========================
 #==========================
 #==========================
@@ -163,9 +170,9 @@ files_to_process = sorted(df_patient["file"].dropna().astype(str).unique().tolis
 # 1.7 GENERATE ALL .NPZ FILES
 import os
 
-input_dir = input_dir
 output_dir = npz_output_dir
 os.makedirs(output_dir, exist_ok=True)
+os.makedirs(viz_output_dir, exist_ok=True)
 #Output .npz contains:
  # X:              (C, N) full z-scored signal
  # mu:             (C,)   mean per channel
@@ -184,12 +191,12 @@ TEEG.full_recording_from_matfiles_1_9_V2(
     output_dir=output_dir,
     files_to_process=files_to_process,
     df_matches=df_merged,
-    amp_threshold=200.0,
-    lowcut=0.5,
-    highcut=48.0,
-    order=4,
-    do_zscore=False,
-    notch_freq=34.5,
+    amp_threshold=amp_threshold,
+    lowcut=lowcut,
+    highcut=highcut,
+    order=order,
+    do_zscore=do_zscore,
+    notch_freq=notch_freq,
 )
 
 #==========================
@@ -201,8 +208,7 @@ TEEG.full_recording_from_matfiles_1_9_V2(
 # Final
 import os
 
-directory = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_test_pipeline_24042026/"
-
+directory = npz_output_dir
 for file_name in sorted(os.listdir(directory)):
 
     if file_name.endswith("_preproc_full.npz"):
@@ -211,14 +217,14 @@ for file_name in sorted(os.listdir(directory)):
 
         print(f"\nProcessing: {file_name}")
 
-
-        TEEG.visualize_seizure_windows_from_npz_1_10V3(
-    npz_path=full_path,
-    channel_idx_1=0,
-    channel_idx_2=1,
-    window_sec=10,
-    n_windows=12,
-    pre_onset_sec=60,
-    vertical_offset_uv=100,
-    output_dir="/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results//seizure_pipelinetest_NOT_normalized24042026"
-)
+    
+    TEEG.visualize_seizure_windows_from_npz_1_10V3(
+        npz_path=full_path,
+        channel_idx_1=channel_idx_1,
+        channel_idx_2=channel_idx_2,
+        window_sec=window_sec,
+        n_windows=n_windows,
+        pre_onset_sec=pre_onset_sec,
+        vertical_offset_uv=vertical_offset_uv,
+        output_dir=viz_output_dir
+    )

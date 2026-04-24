@@ -3,9 +3,9 @@
     "paths": {
         "input_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/",
         "seizure_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/XB47Y_seizures.xlsx",
-        "map_output_path": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_MAPWITHSEIZ.png",
-        "npz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_test_pipeline_24042026/",
-        "viz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/seizure_pipelinetest_NOT_normalized24042026"
+        "map_output_path": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_CONFIG_24042026MAPWITHSEIZ.png",
+        "npz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47YConfig_test_pipeline_24042026/",
+        "viz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/seizureCONFIG_pipeline_test_NOT_normalized24042026"
     },
     "filtering": {
         "amp_threshold": 200.0,
