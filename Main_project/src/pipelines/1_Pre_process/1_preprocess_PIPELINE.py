@@ -1,6 +1,10 @@
 from pathlib import Path
 import sys
-
+import json
+#==========================
+#==========================
+#==========================
+# 0.1 Load modules and json config
 # Get current file location
 current_file = Path(__file__).resolve()
 
@@ -16,7 +20,55 @@ if str(project_root) not in sys.path:
 
 # Now import works
 from src.modules import tools_EEG as TEEG
+#==========================
+#==========================
+#==========================
+# 0.2 json config
+# Usage:
+# python run_pipeline.py configs/config_XB47Y.json
+#
+# If no config path is passed, a default one will be used.
+if len(sys.argv) > 1:
+    config_path = Path(sys.argv[1])
+else:
+    config_path = project_root / "configs" / "config_XB47Y.json"
 
+# Check that the config file exists
+if not config_path.exists():
+    raise FileNotFoundError(f"Config file not found: {config_path}")
+
+# Read config file
+with open(config_path, "r") as f:
+    config = json.load(f)
+#=========================
+#==========================
+#==========================
+# 0.3 EXTRACT VALUES FROM CONFIG
+
+patient_id = config["patient_id"]
+
+input_dir = config["paths"]["input_dir"]
+seizure_file = config["paths"]["seizure_file"]
+map_output_path = config["paths"]["map_output_path"]
+npz_output_dir = config["paths"]["npz_output_dir"]
+viz_output_dir = config["paths"]["viz_output_dir"]
+
+amp_threshold = config["filtering"]["amp_threshold"]
+lowcut = config["filtering"]["lowcut"]
+highcut = config["filtering"]["highcut"]
+order = config["filtering"]["order"]
+do_zscore = config["filtering"]["do_zscore"]
+notch_freq = config["filtering"]["notch_freq"]
+
+show_plot = config["plotting"]["show_plot"]
+channel_idx_1 = config["plotting"]["channel_idx_1"]
+channel_idx_2 = config["plotting"]["channel_idx_2"]
+window_sec = config["plotting"]["window_sec"]
+n_windows = config["plotting"]["n_windows"]
+pre_onset_sec = config["plotting"]["pre_onset_sec"]
+vertical_offset_uv = config["plotting"]["vertical_offset_uv"]
+
+target_date = config["inspection"]["target_date"]
 #==========================
 #==========================
 #==========================
