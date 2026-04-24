@@ -75,21 +75,19 @@ target_date = config["inspection"]["target_date"]
 # 1. Open/load .mat files
 # open all the .mat files from the folder of a single patient
 # create a df with all the information
-path = "//home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/"
-df_patient, error_list = TEEG.process_eeg_mat_files_1_1(path)
+df_patient, error_list = TEEG.process_eeg_mat_files_1_1(input_dir)
 #print(df_patient.head())
 #==========================
 #==========================
 #==========================
 # 1.2 Visualize distribution of daily accumulated recording time
-TEEG.plot_daily_recording_histogram_1_2(df_patient, patient_id="XB47Y")
+TEEG.plot_daily_recording_histogram_1_2(df_patient, patient_id=patient_id)
 
 #==========================
 #==========================
 #==========================
 # 1.3 Gather seizure data from CSV
-file_path = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/XB47Y_seizures.xlsx"
-df_sq, df_di = TEEG.preprocess_seizure_data_1_3(file_path)
+df_sq, df_di = TEEG.preprocess_seizure_data_1_3(seizure_file)
 #==========================
 #==========================
 #==========================
@@ -97,19 +95,19 @@ df_sq, df_di = TEEG.preprocess_seizure_data_1_3(file_path)
 df_matches = TEEG.plot_eeg_availability_with_onsetsV2_1_4(
     df_files=df_patient, 
     df_onsets=df_sq, 
-    output_path="/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_MAPWITHSEIZ.png",
-    show_plot=True
+    output_path=map_output_path,
+    show_plot=show_plot
 )
 #search for the mat file with the onset on the 2019-12-11
-import pandas as pd
+
 
 # 1. Ensure T0 is in datetime format (just in case)
 df_matches['T0'] = pd.to_datetime(df_matches['T0'])
 
 # 2. Filter by comparing only the date part (.dt.date)
 # Note: both pd.Timestamp or datetime.date objects work for this comparison
-target_date = pd.to_datetime("2019-12-11").date()
-df_filtered = df_matches[df_matches['T0'].dt.date == target_date]
+target_date_cfg = pd.to_datetime(target_date).date()
+df_filtered = df_matches[df_matches['T0'].dt.date == target_date_cfg]
 
 # Show results
 #print(f"Found {len(df_filtered)} records for the date: {target_date}")
@@ -165,8 +163,8 @@ files_to_process = sorted(df_patient["file"].dropna().astype(str).unique().tolis
 # 1.7 GENERATE ALL .NPZ FILES
 import os
 
-input_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/"
-output_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_test_pipeline_24042026/"
+input_dir = input_dir
+output_dir = npz_output_dir
 os.makedirs(output_dir, exist_ok=True)
 #Output .npz contains:
  # X:              (C, N) full z-scored signal
