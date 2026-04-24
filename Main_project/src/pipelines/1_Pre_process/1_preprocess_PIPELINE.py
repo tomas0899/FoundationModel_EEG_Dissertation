@@ -25,7 +25,7 @@ from src.modules import tools_EEG as TEEG
 # create a df with all the information
 path = "//home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/"
 df_patient, error_list = TEEG.process_eeg_mat_files_1_1(path)
-print(df_patient.head())
+#print(df_patient.head())
 #==========================
 #==========================
 #==========================
@@ -60,7 +60,7 @@ target_date = pd.to_datetime("2019-12-11").date()
 df_filtered = df_matches[df_matches['T0'].dt.date == target_date]
 
 # Show results
-print(f"Found {len(df_filtered)} records for the date: {target_date}")
+#print(f"Found {len(df_filtered)} records for the date: {target_date}")
 #display(df_matches.head())
 df_matches
 #==========================
@@ -86,8 +86,8 @@ df_merged
 #print(df_matches[df_matches["file"] == "patients.mat"])
 
 # checking that the files with onset are repeated. as they should be, because the df should keep the onset records
-print(df_merged.columns.tolist())
-print(df_merged[df_merged["file"] == "XB47Y_182.mat"])
+#print(df_merged.columns.tolist())
+#print(df_merged[df_merged["file"] == "XB47Y_182.mat"])
 #==========================
 #==========================
 #==========================
@@ -97,15 +97,15 @@ print(df_merged[df_merged["file"] == "XB47Y_182.mat"])
 #df_matches
 df_Unique_match = df_matches['file'].unique()
 df_Unique_match
-print(type(df_Unique_match))
-for file in df_Unique_match:
-    print(file)
+#print(type(df_Unique_match))
+#for file in df_Unique_match:
+#    print(file)
 list_Unique_match = df_Unique_match.tolist()
-print(type(list_Unique_match))
+#print(type(list_Unique_match))
 # unique list from all the mat files
 # this is the input for my function to get the npz
 files_to_process = sorted(df_patient["file"].dropna().astype(str).unique().tolist())
-print(files_to_process)
+#print(files_to_process)
 #==========================
 #==========================
 #==========================
@@ -170,5 +170,5 @@ for file_name in sorted(os.listdir(directory)):
     n_windows=12,
     pre_onset_sec=60,
     vertical_offset_uv=100,
-    output_dir="/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/seizure_pipelinetest_NOT_normalized24042026"
+    output_dir="/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results//seizure_pipelinetest_NOT_normalized24042026"
 )
