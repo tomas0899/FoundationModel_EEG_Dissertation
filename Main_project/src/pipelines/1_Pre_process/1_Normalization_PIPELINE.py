@@ -85,3 +85,11 @@ stats_npz_path, summary = apply_global_channel_normalization(
     ch_count=ch_count,
     output_dir=output_dir
 )
+#==========================
+#==========================
+#==========================
+# 5. Sanity Check
+df_check = TEEG.sanity_check_global_zscore_npz_1_14(
+    original_dir="/home/tperezsanchez/FoundationModel_EEG_Dissertation/EEG_data_vis/results/XB47Y_testALL_25032026/",
+    normalized_dir="/home/tperezsanchez/FoundationModel_EEG_Dissertation/EEG_data_vis/results/XB47Y_28032026Normalized/"
+)
