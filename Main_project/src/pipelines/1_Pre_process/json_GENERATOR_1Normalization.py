@@ -32,7 +32,7 @@ config = {
         "example_npz_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_testALL_25032026/XB47Y_182_preproc_full.npz",
 
         # Output folder where globally normalized .npz files will be saved
-        "normalized_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_28032026Normalized/"
+        "normalized_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_2504206CONFIGNormalized/"
     },
 
     # ------------------------------------------------------

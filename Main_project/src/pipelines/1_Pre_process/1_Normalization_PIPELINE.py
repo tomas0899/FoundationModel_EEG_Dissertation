@@ -146,7 +146,7 @@ if compute_stats:
 if apply_normalization:
     normalized_output_dir.mkdir(parents=True, exist_ok=True)
 
-    stats_npz_path, summary = TEEG.apply_global_channel_normalization(
+    stats_npz_path, summary = TEEG.apply_global_channel_normalization_1_16(
         all_files=all_files,
         ch_mean=ch_mean,
         ch_std=ch_std,

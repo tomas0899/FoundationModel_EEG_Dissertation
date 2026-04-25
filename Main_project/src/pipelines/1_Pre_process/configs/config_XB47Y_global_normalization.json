@@ -1,0 +1,32 @@
+{
+    "patient_id": "XB47Y",
+    "paths": {
+        "input_npz_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_testALL_25032026/",
+        "example_npz_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_testALL_25032026/XB47Y_182_preproc_full.npz",
+        "normalized_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_2504206CONFIGNormalized/"
+    },
+    "file_selection": {
+        "file_pattern": "*.npz"
+    },
+    "normalization": {
+        "expected_n_channels": 2,
+        "eps": 1e-08,
+        "allow_pickle": true,
+        "metadata_keys": [
+            "mu",
+            "sigma",
+            "fs",
+            "channel_names",
+            "source_file",
+            "seizure_onsets",
+            "T0",
+            "TF"
+        ]
+    },
+    "pipeline_steps": {
+        "inspect_example_file": true,
+        "compute_global_channel_stats": true,
+        "apply_global_normalization": true,
+        "run_sanity_check": true
+    }
+}
