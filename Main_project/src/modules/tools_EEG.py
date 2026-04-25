@@ -2239,6 +2239,269 @@ def sanity_check_global_zscore_npz_1_14(
     return df
 #=================================================================================
 #=================================================================================
-#=================================================================================#=================================================================================
+#=================================================================================
+
+# FUNCTION #15
+import numpy as np
+
+def compute_global_channel_stats_1_15(all_files, key="X", verbose=True):
+    """
+    Compute global mean and standard deviation per EEG channel
+    across multiple NPZ files.
+
+    Parameters
+    ----------
+    all_files : list
+        List of paths to NPZ files.
+    
+    key : str
+        Key inside each NPZ file containing the EEG signal.
+        Expected shape: (n_channels, n_samples).
+    
+    verbose : bool
+        If True, print progress and final results.
+
+    Returns
+    -------
+    ch_mean : np.ndarray
+        Global mean per channel.
+    
+    ch_std : np.ndarray
+        Global standard deviation per channel.
+    
+    ch_count : np.ndarray
+        Number of valid finite samples used per channel.
+    
+    skipped : list
+        List of files that were skipped.
+    """
+
+    # Infer number of channels from the first file
+    first_data = np.load(all_files[0], allow_pickle=True)
+    N_CHANNELS = first_data[key].shape[0]
+
+    if verbose:
+        print(f"Number of channels: {N_CHANNELS}")
+
+    # One accumulator per channel
+    ch_count = np.zeros(N_CHANNELS, dtype=np.float64)
+    ch_mean  = np.zeros(N_CHANNELS, dtype=np.float64)
+    ch_M2    = np.zeros(N_CHANNELS, dtype=np.float64)
+
+    skipped = []
+
+    for path in all_files:
+        try:
+            data = np.load(path, allow_pickle=True)
+        except Exception as exc:
+            if verbose:
+                print(f"[WARNING] Could not load '{path.name}': {exc}")
+            skipped.append(path.name)
+            continue
+
+        if key not in data:
+            if verbose:
+                print(f"[WARNING] '{path.name}' has no key '{key}' — skipping.")
+            skipped.append(path.name)
+            continue
+
+        X = data[key]  # Expected shape: (C, N)
+
+        for c in range(N_CHANNELS):
+            row = X[c, :]
+
+            # Keep only valid numeric values
+            finite_vals = row[np.isfinite(row)]
+
+            if finite_vals.size == 0:
+                continue
+
+            # Statistics for the current file/channel
+            b_count = finite_vals.size
+            b_mean  = float(np.mean(finite_vals))
+            b_M2    = float(np.var(finite_vals, ddof=0)) * b_count
+
+            # Chan's parallel update
+            combined_count = ch_count[c] + b_count
+            delta = b_mean - ch_mean[c]
+
+            ch_mean[c] = (
+                ch_count[c] * ch_mean[c] + b_count * b_mean
+            ) / combined_count
+
+            ch_M2[c] += (
+                b_M2
+                + delta**2 * (ch_count[c] * b_count) / combined_count
+            )
+
+            ch_count[c] = combined_count
+
+    # Final standard deviation per channel
+    ch_std = np.sqrt(ch_M2 / ch_count)
+
+    if verbose:
+        print("\n" + "=" * 45)
+        for c in range(N_CHANNELS):
+            print(
+                f"  Channel {c}  |  mean: {ch_mean[c]:.6f}  "
+                f"|  std: {ch_std[c]:.6f}  "
+                f"|  samples: {int(ch_count[c]):,}"
+            )
+        print("=" * 45)
+        print(f"Files skipped: {len(skipped)}")
+
+    return ch_mean, ch_std, ch_count, skipped
 #=================================================================================
 #=================================================================================
+#=================================================================================
+
+# FUNCTION #16
+
+from pathlib import Path
+import numpy as np
+
+def apply_global_channel_normalization_1_16(
+    all_files,
+    ch_mean,
+    ch_std,
+    ch_count,
+    output_dir,
+    key="X",
+    eps=1e-8,
+    verbose=True
+):
+    """
+    Apply global channel-wise z-score normalization to multiple NPZ files.
+
+    This function uses global mean and standard deviation values computed
+    from all recordings, and saves a normalized version of each NPZ file.
+
+    Parameters
+    ----------
+    all_files : list
+        List of paths to NPZ files.
+
+    ch_mean : np.ndarray
+        Global mean per channel.
+
+    ch_std : np.ndarray
+        Global standard deviation per channel.
+
+    ch_count : np.ndarray
+        Number of samples used to compute global statistics.
+
+    output_dir : str or Path
+        Directory where normalized NPZ files will be saved.
+
+    key : str
+        Key inside each NPZ file containing the EEG signal.
+
+    eps : float
+        Small value added to standard deviation to avoid division by zero.
+
+    verbose : bool
+        If True, print progress messages.
+
+    Returns
+    -------
+    stats_npz_path : Path
+        Path to the saved global normalization statistics file.
+
+    summary : dict
+        Dictionary with processing summary.
+    """
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    n_channels = len(ch_mean)
+
+    metadata_keys = (
+        "mu", "sigma", "fs", "channel_names",
+        "source_file", "seizure_onsets", "T0", "TF"
+    )
+
+    n_ok = 0
+    n_skipped = 0
+
+    recording_names = []
+    recording_shapes = []
+    recording_ok = []
+
+    for path in all_files:
+        try:
+            data = np.load(path, allow_pickle=True)
+            X = data[key]  # Expected shape: (C, N)
+
+            if X.shape[0] != n_channels:
+                raise ValueError(
+                    f"Expected {n_channels} channels, got {X.shape[0]}"
+                )
+
+            # Global channel-wise normalization
+            X_norm = np.empty_like(X, dtype=np.float32)
+
+            for c in range(n_channels):
+                X_norm[c, :] = (X[c, :] - ch_mean[c]) / (ch_std[c] + eps)
+
+            # Preserve original metadata if available
+            metadata = {
+                meta_key: data[meta_key]
+                for meta_key in metadata_keys
+                if meta_key in data
+            }
+
+            # Save normalized NPZ
+            np.savez_compressed(
+                output_dir / path.name,
+                X=X_norm,
+                global_mu=ch_mean.astype(np.float32),
+                global_sigma=ch_std.astype(np.float32),
+                normalization_type="global_channel_zscore",
+                eps=np.float32(eps),
+                **metadata
+            )
+
+            recording_names.append(path.name)
+            recording_shapes.append(X.shape)
+            recording_ok.append(True)
+
+            n_ok += 1
+
+        except Exception as exc:
+            if verbose:
+                print(f"[WARNING] Failed on '{path.name}': {exc}")
+
+            recording_names.append(path.name)
+            recording_shapes.append((-1, -1))
+            recording_ok.append(False)
+
+            n_skipped += 1
+
+    # Save global normalization statistics
+    stats_npz_path = output_dir / "normalization_stats_global.npz"
+
+    np.savez_compressed(
+        stats_npz_path,
+        global_mu=ch_mean.astype(np.float32),
+        global_sigma=ch_std.astype(np.float32),
+        global_sample_count=ch_count.astype(np.int64),
+        n_channels=np.int32(n_channels),
+        eps=np.float32(eps),
+        recording_names=np.array(recording_names, dtype=object),
+        recording_shapes=np.array(recording_shapes, dtype=object),
+        recording_ok=np.array(recording_ok, dtype=bool),
+    )
+
+    summary = {
+        "n_ok": n_ok,
+        "n_skipped": n_skipped,
+        "output_dir": output_dir,
+        "stats_npz_path": stats_npz_path,
+    }
+
+    if verbose:
+        print(f"\nDone. Saved: {n_ok}  |  Skipped: {n_skipped}")
+        print(f"Global stats written to: {stats_npz_path}")
+
+    return stats_npz_path, summary

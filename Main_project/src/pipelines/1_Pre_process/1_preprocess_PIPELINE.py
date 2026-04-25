@@ -163,6 +163,7 @@ list_Unique_match = df_Unique_match.tolist()
 # this is the input for my function to get the npz
 files_to_process = sorted(df_patient["file"].dropna().astype(str).unique().tolist())
 #print(files_to_process)
+#everything must pass
 #==========================
 #==========================
 #==========================
@@ -228,3 +229,9 @@ for file_name in sorted(os.listdir(directory)):
         vertical_offset_uv=vertical_offset_uv,
         output_dir=viz_output_dir
     )
+
+print("patient_id:", patient_id)
+print("input_dir:", input_dir)
+print("seizure_file:", seizure_file)
+print("npz_output_dir:", npz_output_dir)
+print("viz_output_dir:", viz_output_dir)
