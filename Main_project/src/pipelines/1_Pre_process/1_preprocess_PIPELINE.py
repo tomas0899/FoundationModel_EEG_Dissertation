@@ -5,7 +5,7 @@ import pandas as pd
 #==========================
 #==========================
 #==========================
-# 0.1 Load modules and json config
+# 0.1 Load modules 
 # Get current file location
 current_file = Path(__file__).resolve()
 
