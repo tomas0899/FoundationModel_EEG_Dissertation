@@ -2505,3 +2505,158 @@ def apply_global_channel_normalization_1_16(
         print(f"Global stats written to: {stats_npz_path}")
 
     return stats_npz_path, summary
+
+#=================================================================================
+#=================================================================================
+#=================================================================================
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# FEATURE EXTRACTION
+# Function #1
+def parse_timestamp_2_1(val):
+    """Accept Unix float, datetime string, or repeated timestamp arrays."""
+
+    if isinstance(val, np.ndarray):
+        flat = val.ravel()
+        cleaned = [str(x).strip() for x in flat if str(x).strip() != ""]
+
+        if len(cleaned) == 0:
+            return None
+
+        unique_vals = list(dict.fromkeys(cleaned))
+
+        if len(unique_vals) == 1:
+            val = unique_vals[0]
+        else:
+            raise ValueError(f"Timestamp array has multiple different values: {unique_vals}")
+
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        pass
+
+    val = str(val).strip()
+    dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S.%f")
+    return dt.replace(tzinfo=timezone.utc).timestamp()
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #2
+
+def clean_onsets_2_2(x):
+    if isinstance(x, (list, np.ndarray)):
+        return [i for i in x if not pd.isna(i)]
+    elif pd.isna(x):
+        return []
+    else:
+        return [x]
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #3
+def create_eeg_windows_2_3(df, window_sec=10):
+    """
+    Create window-level metadata from EEG recordings stored in .npz files.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame with at least:
+        - file_path
+        - file_name
+        - fs (sampling frequency)
+        - seizure_onsets_clean
+
+    window_sec : int or float, optional (default=10)
+        Window size in seconds.
+
+    Returns
+    -------
+    df_windows : pandas.DataFrame
+        One row per window with metadata.
+    """
+
+    rows_windows = []
+
+    for idx, row in df.iterrows():
+        # Load data
+        file_path = row["file_path"]
+        data = np.load(file_path, allow_pickle=True)
+
+        X = data["X"]  # shape: (channels, samples)
+        fs = row["fs"]
+
+        # Compute window size in samples
+        window_size = int(window_sec * fs)
+
+        # Total samples
+        N = X.shape[1]
+
+        # Number of full windows
+        n_windows = N // window_size  # ignore incomplete last window
+
+        seizure_onsets = row["seizure_onsets_clean"]
+
+        for w in range(n_windows):
+            start = w * window_size
+            end = start + window_size
+
+            rows_windows.append({
+                "file_name": row["file_name"],
+                "window_id": w,
+                "start_sample": start,
+                "end_sample": end,
+                "fs": fs,
+                "n_channels": X.shape[0],
+                "window_sec": window_sec,
+                "seizure_onsets": seizure_onsets
+            })
+
+    df_windows = pd.DataFrame(rows_windows)
+
+    return df_windows
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #4
+
+def get_windows_with_seizures_2_4(df_windows, filter_seizures=True):
+    """
+    Optionally filter windows that belong to recordings with seizures.
+
+    Parameters
+    ----------
+    df_windows : pandas.DataFrame
+        DataFrame containing all EEG windows
+
+    filter_seizures : bool (default=True)
+        - True  → return only windows from recordings that have seizures
+        - False → return full dataset without filtering
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered or unfiltered DataFrame (copy, original is not modified)
+    """
+
+    # If filtering is disabled, return a copy of the original DataFrame
+    if not filter_seizures:
+        return df_windows.copy()
+
+    # Create a boolean mask to identify rows with valid seizure information
+    mask = df_windows["seizure_onsets"].apply(
+        lambda x: (
+            not pd.isna(x).all()  # case: list/array → check if at least one valid value exists
+            if isinstance(x, (list, np.ndarray))
+            else not pd.isna(x)   # case: single value → check if not NaN
+        )
+    )
+
+    # Apply the mask to filter the DataFrame
+    df_seizures = df_windows[mask].copy()
+
+    return df_seizures
