@@ -2660,3 +2660,314 @@ def get_windows_with_seizures_2_4(df_windows, filter_seizures=True):
     df_seizures = df_windows[mask].copy()
 
     return df_seizures
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #5
+
+
+
+# Labeling:
+# step by step
+import pandas as pd
+import numpy as np
+
+# 1. Helper functions
+LABEL_MAP = {
+    "interictal": 0,
+    "preictal": 1,
+    "seizure": 2
+}
+
+
+def overlaps(a_start, a_end, b_start, b_end):
+    """
+    Return True if two time intervals overlap.
+    """
+    return (a_start < b_end) and (a_end > b_start)
+#window:   |----------|
+#seizure:       |----------|
+# returns True in that case, because it overlaps
+
+def is_in_gap(window_start, window_end, preictal_end, seizure_start):
+    """
+    Return True if the window overlaps the gap between
+    the preictal interval and the seizure interval.
+    detects if a window is in between the space of preictal ending and seizure start
+    """
+    return overlaps(window_start, window_end, preictal_end, seizure_start)
+#onset -10 min    onset -5 min        onset        onset +5 min
+#|--- preictal ---|---- gap ----|--- seizure ---|
+
+def get_seizure_intervals(onset, preictal_range_min, ictal_range_min):
+    """
+    Given one seizure onset, create the preictal and seizure intervals.
+    E.g.:
+    onset = "2026-04-27 12:00:00"
+    preictal_range_min = (-10, -5)
+    ictal_range_min = (0, 5)
+    returns:
+    preictal: 11:50 to 11:55
+    seizure:  12:00 to 12:05
+    """
+    onset = pd.to_datetime(onset)
+
+    preictal_start = onset + pd.Timedelta(minutes=preictal_range_min[0])
+    preictal_end = onset + pd.Timedelta(minutes=preictal_range_min[1])
+
+    seizure_start = onset + pd.Timedelta(minutes=ictal_range_min[0])
+    seizure_end = onset + pd.Timedelta(minutes=ictal_range_min[1])
+
+    return preictal_start, preictal_end, seizure_start, seizure_end
+# 2. Prepare dataframe
+def initialize_labeled_dataframe_2_5_1(df_windows):
+    """
+    Create a copy of df_windows and add empty columns
+    needed for labeling.
+    df_windows original
+        ↓
+    initialize_labeled_dataframe()
+        ↓
+    df_labeled with empty columns
+    """
+    # 2.1 creates a copy to preserve original dataframe
+    df_labeled = df_windows.copy()
+    # 2.2 add new columns
+    df_labeled["window_start_time"] = pd.NaT
+    df_labeled["window_end_time"] = pd.NaT
+    df_labeled["class_label"] = np.nan
+    df_labeled["label_name"] = pd.NA
+    df_labeled["excluded_reason"] = pd.NA
+
+    return df_labeled
+# 3. Calculate real time per window:
+def compute_window_times(row, recording_start):
+    """
+    Compute the real datetime start and end of one EEG window.
+
+    Parameters
+    ----------
+    row : pd.Series
+        One row from df_windows.
+
+    recording_start : datetime-like
+        Start time of the recording.
+
+    Returns
+    -------
+    window_start_time : pd.Timestamp
+    window_end_time : pd.Timestamp
+    -----
+    start_sample / fs = seconds from beginning of recording
+    end_sample / fs   = seconds from end of recording
+
+    E.g:
+    start_sample = 2070
+    end_sample = 4140
+    fs = 207
+    
+    start_sec = 10 segundos
+    end_sec   = 20 segundos
+    if recording started:
+    2026-04-27 12:00:00
+    then:
+    window_start_time = 2026-04-27 12:00:10
+    window_end_time   = 2026-04-27 12:00:20
+    """
+
+    recording_start = pd.to_datetime(recording_start)
+
+    fs = row["fs"]
+
+    start_sec = row["start_sample"] / fs
+    end_sec = row["end_sample"] / fs
+
+    window_start_time = recording_start + pd.Timedelta(seconds=start_sec)
+    window_end_time = recording_start + pd.Timedelta(seconds=end_sec)
+
+    return window_start_time, window_end_time
+# 4. Search for corresponding recording
+def get_matching_recording(row, df_recordings):
+    """
+    Find the recording-level metadata corresponding to one window.
+        row["file_name"]
+            ↓
+    search for file name in df_recording
+            ↓
+    returns corresponding row
+    """
+
+    file_name = row["file_name"]
+
+    matching_rec = df_recordings[
+        df_recordings["file_name"] == file_name
+    ]
+
+    if matching_rec.empty:
+        raise ValueError(
+            f"No matching recording found in df_recordings for file_name: {file_name}"
+        )
+
+    rec = matching_rec.iloc[0]
+
+    return rec
+# 5. get real time per window
+def get_window_datetime_info(row, df_recordings):
+    """
+    Get the real start and end datetime of one EEG window.
+        row de df_windows
+            ↓
+    search for metadata in df_recordings
+            ↓
+    extract start_time from recording
+            ↓
+    convert start_sample/end_sample into real datetime
+    """
+
+    rec = get_matching_recording(row, df_recordings)
+
+    window_start_time, window_end_time = compute_window_times(
+        row=row,
+        recording_start=rec["start_time"]
+    )
+
+    return window_start_time, window_end_time
+# 6. Labels one window at a time
+def label_single_window(
+    window_start_time,
+    window_end_time,
+    seizure_onsets,
+    preictal_range_min=(-10, -5),
+    ictal_range_min=(0, 5),
+    include_gap_as_interictal=True
+):
+    """
+    Label one EEG window as interictal, preictal, seizure,
+    or mark it for exclusion if it falls in the periictal gap.
+    
+    One window + seizure_onsets
+            ↓
+    overlap with seizure?
+            ↓
+    yes → seizure
+    
+    elif:
+            ↓
+    overlap with preictal?
+            ↓
+    yes → preictal
+    
+    else:
+            ↓
+    ¿overlap with gap?
+            ↓
+    yes and include_gap_as_interictal=False → exclude
+    
+    if nothing:
+            ↓
+    interictal
+    """
+
+    # Default label
+    assigned_label = LABEL_MAP["interictal"]
+    assigned_name = "interictal"
+    excluded_reason = pd.NA
+
+    # Clean seizure onsets
+    seizure_onsets = clean_onsets(seizure_onsets)
+
+    # If no seizure onsets exist, keep interictal
+    if len(seizure_onsets) == 0:
+        return assigned_label, assigned_name, excluded_reason
+
+    overlaps_gap = False
+
+    for onset in seizure_onsets:
+
+        preictal_start, preictal_end, seizure_start, seizure_end = (
+            get_seizure_intervals(
+                onset=onset,
+                preictal_range_min=preictal_range_min,
+                ictal_range_min=ictal_range_min
+            )
+        )
+
+        # 1. Seizure has highest priority
+        if overlaps(
+            window_start_time,
+            window_end_time,
+            seizure_start,
+            seizure_end
+        ):
+            assigned_label = LABEL_MAP["seizure"]
+            assigned_name = "seizure"
+            excluded_reason = pd.NA
+            break
+
+        # 2. Preictal has second priority
+        elif overlaps(
+            window_start_time,
+            window_end_time,
+            preictal_start,
+            preictal_end
+        ):
+            assigned_label = LABEL_MAP["preictal"]
+            assigned_name = "preictal"
+            excluded_reason = pd.NA
+
+        # 3. Optional gap detection
+        elif preictal_end < seizure_start:
+            if is_in_gap(
+                window_start_time,
+                window_end_time,
+                preictal_end,
+                seizure_start
+            ):
+                overlaps_gap = True
+
+    # Exclude gap windows if requested
+    if overlaps_gap and not include_gap_as_interictal:
+        assigned_label = np.nan
+        assigned_name = pd.NA
+        excluded_reason = "periictal_gap"
+
+    return assigned_label, assigned_name, excluded_reason
+# 7. loop through all windows
+def apply_window_labeling_2_5_2(
+    df_labeled,
+    df_recordings,
+    preictal_range_min=(-10, -5),
+    ictal_range_min=(0, 5),
+    include_gap_as_interictal=True
+):
+    """
+    Apply window labeling row by row to the full dataframe.
+    """
+
+    for idx, row in df_labeled.iterrows():
+
+        # 1. Compute real datetime of the window
+        window_start_time, window_end_time = get_window_datetime_info(
+            row=row,
+            df_recordings=df_recordings
+        )
+
+        # 2. Label one window
+        assigned_label, assigned_name, excluded_reason = label_single_window(
+            window_start_time=window_start_time,
+            window_end_time=window_end_time,
+            seizure_onsets=row["seizure_onsets"],
+            preictal_range_min=preictal_range_min,
+            ictal_range_min=ictal_range_min,
+            include_gap_as_interictal=include_gap_as_interictal
+        )
+
+        # 3. Save results
+        df_labeled.at[idx, "window_start_time"] = window_start_time
+        df_labeled.at[idx, "window_end_time"] = window_end_time
+        df_labeled.at[idx, "class_label"] = assigned_label
+        df_labeled.at[idx, "label_name"] = assigned_name
+        df_labeled.at[idx, "excluded_reason"] = excluded_reason
+
+    return df_labeled
