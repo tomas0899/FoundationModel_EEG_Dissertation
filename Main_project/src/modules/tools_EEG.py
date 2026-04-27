@@ -2679,6 +2679,13 @@ LABEL_MAP = {
     "preictal": 1,
     "seizure": 2
 }
+def clean_onsets(x):
+    if isinstance(x, (list, np.ndarray)):
+        return [i for i in x if not pd.isna(i)]
+    elif pd.isna(x):
+        return []
+    else:
+        return [x]
 
 
 def overlaps(a_start, a_end, b_start, b_end):
