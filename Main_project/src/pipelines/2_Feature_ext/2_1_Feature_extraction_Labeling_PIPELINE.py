@@ -30,6 +30,20 @@ from src.modules import tools_EEG as TEEG
 #==========================
 #==========================
 #==========================
+# 0.2 Load JSON config
+
+
+if len(sys.argv) > 1:
+    config_path = Path(sys.argv[1])
+else:
+    config_path = project_root / "configs" / "config_XB47Y_labeling.json"
+
+with open(config_path, "r") as f:
+    config = json.load(f)
+
+print(f"Loaded config from: {config_path.resolve()}")
+print(f"Patient ID: {config['patient_id']}")
+
 # 0.2 Load FILES
 files = Path("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_28032026Normalized/")
 base_files = sorted(files.glob("*full.npz"))
