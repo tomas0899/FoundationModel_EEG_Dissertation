@@ -3020,7 +3020,7 @@ def filter_preictal_seizure_2_5_3(
 # Function #6
 
 
-def extract_time_features_2_6_1(window, channel_names=None):
+def extract_time_features(window, channel_names=None):
     """
     Extract per-channel time-domain features from one EEG window.
 
@@ -3067,7 +3067,7 @@ def extract_time_features_2_6_1(window, channel_names=None):
 
     return features
 
-def extract_frequency_features_2_6_2(window, fs, channel_names=None):
+def extract_frequency_features(window, fs, channel_names=None):
     """
     Extract per-channel frequency-domain features from one EEG window.
 
@@ -3145,3 +3145,81 @@ def extract_frequency_features_2_6_2(window, fs, channel_names=None):
         features[f"peak_frequency_{ch_name}"] = peak_freq
 
     return features
+
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #7
+
+def extract_features_from_row_cached_2_7(row, npz_base_path, file_cache):
+    """
+    Extract metadata + per-channel features for a single EEG window row,
+    using a cache so repeated NPZ files are not reloaded.
+
+    Parameters
+    ----------
+    row : pd.Series
+        One row from df_final. Must contain:
+        - file_name
+        - start_sample
+        - end_sample
+
+    npz_base_path : str
+        Directory containing the preprocessed NPZ files.
+
+    file_cache : dict
+        Dictionary used to store already loaded NPZ content by file name.
+
+    Returns
+    -------
+    full_row : dict
+        Dictionary containing original metadata plus extracted features.
+    """
+
+    # Get file name from the dataframe row
+    file_name = row["file_name"]
+
+    # Load the NPZ only once per file and store it in the cache
+    if file_name not in file_cache:
+        npz_path = os.path.join(npz_base_path, file_name)
+        npz_data = np.load(npz_path, allow_pickle=True)
+
+        file_cache[file_name] = {
+            "X": npz_data["X"],
+            "fs": float(npz_data["fs"]),
+            "channel_names": npz_data["channel_names"]
+        }
+
+    # Retrieve cached data for the current file
+    X = file_cache[file_name]["X"]
+    fs = file_cache[file_name]["fs"]
+    channel_names = file_cache[file_name]["channel_names"]
+
+    # Read window boundaries from the dataframe row
+    start_sample = int(row["start_sample"])
+    end_sample = int(row["end_sample"])
+
+    # Slice the current window from the recording
+    window = X[:, start_sample:end_sample]
+
+    # Extract time-domain features
+    time_features = extract_time_features(
+        window,
+        channel_names=channel_names
+    )
+
+    # Extract frequency-domain features
+    freq_features = extract_frequency_features(
+        window,
+        fs=fs,
+        channel_names=channel_names
+    )
+
+    # Merge all extracted features
+    all_features = {**time_features, **freq_features}
+
+    # Merge original metadata and extracted features
+    full_row = {**row.to_dict(), **all_features}
+
+    return full_row
