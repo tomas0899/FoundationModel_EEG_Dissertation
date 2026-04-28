@@ -240,9 +240,13 @@ df_labeled = TEEG.apply_window_labeling_2_5_2(
 #==========================
 #==========================
 # 7. (Optional) Filtering only 
+keep_only_preictal_seizure = config["filtering"]["keep_only_preictal_seizure"]
+
+print(f"Keep only preictal + seizure: {keep_only_preictal_seizure}")
+
 df_final = TEEG.filter_preictal_seizure_2_5_3(
     df_labeled,
-    keep_only_preictal_seizure=True
+    keep_only_preictal_seizure=keep_only_preictal_seizure
 )
 df_final.head()
 df_final.shape
@@ -250,11 +254,18 @@ df_final.shape
 #==========================
 #==========================
 # 8. Save df(s) as pickle
-output_dir = Path("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y/Feature_ext/Part1_labeling")
+output_dir = Path(config["paths"]["output_dir"])
 output_dir.mkdir(parents=True, exist_ok=True)
 
-path_labeled = output_dir / "df_labeled_all.pkl"
-path_final = output_dir / "df_ictal_Vs_Preictal.pkl"
+df_labeled_filename = config["output_files"]["df_labeled_filename"]
+df_final_filename = config["output_files"]["df_final_filename"]
+
+path_labeled = output_dir / df_labeled_filename
+path_final = output_dir / df_final_filename
+
+print(f"Output directory: {output_dir.resolve()}")
+print(f"df_labeled filename: {df_labeled_filename}")
+print(f"df_final filename: {df_final_filename}")
 
 df_labeled.to_pickle(path_labeled)
 df_final.to_pickle(path_final)
