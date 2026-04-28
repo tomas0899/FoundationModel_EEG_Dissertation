@@ -2978,3 +2978,36 @@ def apply_window_labeling_2_5_2(
         df_labeled.at[idx, "excluded_reason"] = excluded_reason
 
     return df_labeled
+def filter_preictal_seizure_2_5_3(
+    df_labeled,
+    keep_only_preictal_seizure=True
+):
+    """
+    Optionally keep only preictal and seizure windows.
+
+    Parameters
+    ----------
+    df_labeled : pd.DataFrame
+        DataFrame with labeled windows.
+
+    keep_only_preictal_seizure : bool
+        If True, keep only labels 1 (preictal) and 2 (seizure).
+        If False, return the full dataframe unchanged.
+
+    Returns
+    -------
+    df_final : pd.DataFrame
+    """
+
+    if not keep_only_preictal_seizure:
+        # Still ensure correct dtype
+        df_labeled["class_label"] = df_labeled["class_label"].astype("Int64")
+        return df_labeled
+
+    df_final = df_labeled[
+        df_labeled["class_label"].isin([1, 2])
+    ].copy()
+
+    df_final["class_label"] = df_final["class_label"].astype(int)
+
+    return df_final
