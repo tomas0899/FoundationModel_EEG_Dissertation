@@ -43,16 +43,21 @@ with open(config_path, "r") as f:
 
 print(f"Loaded config from: {config_path.resolve()}")
 print(f"Patient ID: {config['patient_id']}")
+#==========================
+#==========================
+#==========================
+# 0.3 Load FILES
 
-# 0.2 Load FILES
-files = Path("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_28032026Normalized/")
-base_files = sorted(files.glob("*full.npz"))
+files = Path(config["paths"]["input_npz_dir"])
+file_pattern = config["file_selection"]["file_pattern"]
 
+base_files = sorted(files.glob(file_pattern))
+
+print(f"Input folder: {files.resolve()}")
+print(f"File pattern: {file_pattern}")
 print(f"Found {len(base_files)} .npz files")
 
 rows = []
-from datetime import datetime, timezone
-import numpy as np
 
 
 def parse_timestamp(val):
@@ -195,7 +200,14 @@ df["seizure_onsets_clean"] = df["seizure_onsets"].apply(clean_onsets)
 #==========================
 # 5. Windowing
 # Create an empty list that will store one dictionary per EEG window
-df_windows = TEEG.create_eeg_windows_2_3(df, window_sec=10)
+window_sec = config["windowing"]["window_sec"]
+
+print(f"Window size: {window_sec} seconds")
+
+df_windows = TEEG.create_eeg_windows_2_3(
+    df,
+    window_sec=window_sec
+)
 # Convert the list of dictionaries into a new dataframe
 # Each row now represents one 10-second window
 
@@ -209,12 +221,20 @@ df_windows[df_windows["seizure_onsets"].apply(lambda x: not pd.isna(x).all() if 
 # 6. Labeling
 df_labeled = TEEG.initialize_labeled_dataframe_2_5_1(df_windows)
 
+preictal_range_min = tuple(config["labeling"]["preictal_range_min"])
+ictal_range_min = tuple(config["labeling"]["ictal_range_min"])
+include_gap_as_interictal = config["labeling"]["include_gap_as_interictal"]
+
+print(f"Preictal range: {preictal_range_min} minutes")
+print(f"Ictal range: {ictal_range_min} minutes")
+print(f"Include gap as interictal: {include_gap_as_interictal}")
+
 df_labeled = TEEG.apply_window_labeling_2_5_2(
     df_labeled=df_labeled,
     df_recordings=df,
-    preictal_range_min=(-10, -5),
-    ictal_range_min=(0, 5),
-    include_gap_as_interictal=True
+    preictal_range_min=preictal_range_min,
+    ictal_range_min=ictal_range_min,
+    include_gap_as_interictal=include_gap_as_interictal
 )
 #==========================
 #==========================
