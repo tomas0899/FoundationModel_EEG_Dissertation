@@ -142,3 +142,10 @@ if config["pipeline_steps"]["save_outputs"]:
     print(f"Output directory: {output_dir.resolve()}")
     print(f"df_features_all filename: {df_features_all_filename}")
     print(f"df_features_ictalVspreictal filename: {df_features_ictalVspreictal_filename}")
+    if df_features_all is not None:
+        df_features_all.to_pickle(path_all)
+        print(f"df_features_all saved in: {path_all.resolve()}")
+
+    if df_features_ictalVspreictal is not None:
+        df_features_ictalVspreictal.to_pickle(path_ictalVspreictal)
+        print(f"df_features_ictalVspreictal saved in: {path_ictalVspreictal.resolve()}")
