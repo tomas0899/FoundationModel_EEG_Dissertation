@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
+from scipy.stats import skew, kurtosis
 from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
@@ -3011,3 +3012,136 @@ def filter_preictal_seizure_2_5_3(
     df_final["class_label"] = df_final["class_label"].astype(int)
 
     return df_final
+
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #6
+
+
+def extract_time_features_2_6_1(window, channel_names=None):
+    """
+    Extract per-channel time-domain features from one EEG window.
+
+    Parameters
+    ----------
+    window : np.ndarray
+        Shape (C, window_samples)
+    channel_names : list or None
+        Optional list of channel names
+
+    Returns
+    -------
+    features : dict
+        Flat dictionary with one feature per channel
+    """
+    n_channels = window.shape[0]
+    features = {}
+
+    for ch in range(n_channels):
+        x = window[ch, :]
+
+        if channel_names is not None and ch < len(channel_names):
+            ch_name = str(channel_names[ch])
+        else:
+            ch_name = f"ch{ch+1}"
+
+        ch_name = ch_name.replace(" ", "_").replace("-", "_")
+
+        std_x = np.std(x)
+
+        features[f"mean_{ch_name}"] = np.mean(x)
+        features[f"std_{ch_name}"] = std_x
+        features[f"var_{ch_name}"] = np.var(x)
+        features[f"rms_{ch_name}"] = np.sqrt(np.mean(x**2))
+        features[f"ptp_{ch_name}"] = np.ptp(x)
+        features[f"line_length_{ch_name}"] = np.sum(np.abs(np.diff(x)))
+
+        if std_x < 1e-6:
+            features[f"skew_{ch_name}"] = np.nan
+            features[f"kurtosis_{ch_name}"] = np.nan
+        else:
+            features[f"skew_{ch_name}"] = skew(x, bias=False)
+            features[f"kurtosis_{ch_name}"] = kurtosis(x, bias=False)
+
+    return features
+
+def extract_frequency_features_2_6_2(window, fs, channel_names=None):
+    """
+    Extract per-channel frequency-domain features from one EEG window.
+
+    Parameters
+    ----------
+    window : np.ndarray
+        Shape (C, window_samples)
+    fs : float
+        Sampling frequency in Hz
+    channel_names : list or None
+        Optional list of channel names
+
+    Returns
+    -------
+    features : dict
+        Flat dictionary with one feature per channel
+    """
+    bands = {
+        "delta": (0.5, 4.0),
+        "theta": (4.0, 8.0),
+        "alpha": (8.0, 13.0),
+        "beta":  (13.0, 30.0),
+        "gamma": (30.0, 40.0),
+    }
+
+    n_channels = window.shape[0]
+    features = {}
+
+    for ch in range(n_channels):
+        x = window[ch, :]
+
+        if channel_names is not None and ch < len(channel_names):
+            ch_name = str(channel_names[ch])
+        else:
+            ch_name = f"ch{ch+1}"
+
+        ch_name = ch_name.replace(" ", "_").replace("-", "_")
+
+        if len(x) < 2:
+            for band_name in bands:
+                features[f"{band_name}_power_{ch_name}"] = np.nan
+            features[f"peak_frequency_{ch_name}"] = np.nan
+            continue
+
+        nperseg = min(len(x), int(fs * 2))
+        noverlap = nperseg // 2
+
+        freqs, psd = welch(
+            x,
+            fs=fs,
+            window="hann",
+            nperseg=nperseg,
+            noverlap=noverlap,
+            detrend="constant",
+            scaling="density"
+        )
+
+        for band_name, (f_low, f_high) in bands.items():
+            mask = (freqs >= f_low) & (freqs < f_high)
+
+            if np.any(mask):
+                band_power = np.trapezoid(psd[mask], freqs[mask])
+            else:
+                band_power = np.nan
+
+            features[f"{band_name}_power_{ch_name}"] = band_power
+
+        eeg_mask = (freqs >= 0.5) & (freqs <= 40.0)
+        if np.any(eeg_mask):
+            peak_idx = np.argmax(psd[eeg_mask])
+            peak_freq = freqs[eeg_mask][peak_idx]
+        else:
+            peak_freq = np.nan
+
+        features[f"peak_frequency_{ch_name}"] = peak_freq
+
+    return features

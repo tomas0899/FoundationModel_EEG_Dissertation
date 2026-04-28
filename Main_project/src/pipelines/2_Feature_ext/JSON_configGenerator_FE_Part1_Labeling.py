@@ -110,7 +110,7 @@ def create_labeling_config():
     # ----------------------------------------------------------
     # SAVE JSON FILE
     # ----------------------------------------------------------
-    config_path = Path("configs/config_XB47Y_labeling.json")
+    config_path = Path("configs/config_XB47Y_FE_Part1_labeling.json")
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(config_path, "w") as f:
@@ -124,3 +124,6 @@ def create_labeling_config():
 # ==========================================================
 if __name__ == "__main__":
     create_labeling_config()
+
+#how to run script:
+# python 2_1_Feature_ext....py configs/config_XB47Y_labeling.json
