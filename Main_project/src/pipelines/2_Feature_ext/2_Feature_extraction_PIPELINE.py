@@ -216,4 +216,14 @@ df_final.shape
 #==========================
 #==========================
 # 8. Save df(s) as pickle
+output_dir = Path("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y/Feature_ext/Part1_labeling")
+output_dir.mkdir(parents=True, exist_ok=True)
 
+path_labeled = output_dir / "df_labeled_all.pkl"
+path_final = output_dir / "df_ictal_Vs_Preictal.pkl"
+
+df_labeled.to_pickle(path_labeled)
+df_final.to_pickle(path_final)
+
+print(f"df_labeled saved in: {path_labeled.resolve()}")
+print(f"df_final saved in: {path_final.resolve()}")
