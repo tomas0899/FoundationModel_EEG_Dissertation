@@ -1,0 +1,40 @@
+{
+    "patient_id": "XB47Y",
+    "paths": {
+        "input_npz_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y_28032026Normalized/",
+        "output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y/Feature_ext/Part1_labeling"
+    },
+    "file_selection": {
+        "file_pattern": "*full.npz"
+    },
+    "windowing": {
+        "window_sec": 10
+    },
+    "labeling": {
+        "preictal_range_min": [
+            -6,
+            -5
+        ],
+        "ictal_range_min": [
+            0,
+            1
+        ],
+        "include_gap_as_interictal": true
+    },
+    "filtering": {
+        "keep_only_preictal_seizure": true
+    },
+    "output_files": {
+        "df_labeled_filename": "df_labeled_all_1min.pkl",
+        "df_final_filename": "df_ictal_Vs_Preictal_1min.pkl"
+    },
+    "pipeline_steps": {
+        "load_metadata": true,
+        "temporal_sanity_check": true,
+        "clean_onsets": true,
+        "run_windowing": true,
+        "run_labeling": true,
+        "run_filtering": true,
+        "save_outputs": true
+    }
+}

@@ -55,10 +55,10 @@ def create_labeling_config():
         # ------------------------------------------------------
         "labeling": {
             # Preictal window range (in minutes before seizure)
-            "preictal_range_min": [-10, -5],
+            "preictal_range_min": [-6, -5],
 
             # Ictal window range (in minutes after seizure onset)
-            "ictal_range_min": [0, 5],
+            "ictal_range_min": [0, 1],
 
             # Whether to label gaps as interictal (0)
             "include_gap_as_interictal": True
@@ -76,8 +76,8 @@ def create_labeling_config():
         # OUTPUT FILES
         # ------------------------------------------------------
         "output_files": {
-            "df_labeled_filename": "df_labeled_all.pkl",
-            "df_final_filename": "df_ictal_Vs_Preictal.pkl"
+            "df_labeled_filename": "df_labeled_all_1min.pkl",
+            "df_final_filename": "df_ictal_Vs_Preictal_1min.pkl"
         },
 
         # ------------------------------------------------------
@@ -110,7 +110,7 @@ def create_labeling_config():
     # ----------------------------------------------------------
     # SAVE JSON FILE
     # ----------------------------------------------------------
-    config_path = Path("configs/config_XB47Y_FE_Part1_labeling.json")
+    config_path = Path("configs/config_XB47Y_FE_Part1_labeling_1min30042026.json")
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(config_path, "w") as f:

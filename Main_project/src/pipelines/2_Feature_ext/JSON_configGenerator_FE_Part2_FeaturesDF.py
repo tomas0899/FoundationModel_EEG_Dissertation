@@ -41,8 +41,8 @@ def create_feature_extraction_config():
         # INPUT FILES
         # ------------------------------------------------------
         "input_files": {
-            "df_labeled_all": "df_labeled_all.pkl",
-            "df_ictalVspreictal": "df_ictal_Vs_Preictal.pkl"
+            "df_labeled_all": "df_labeled_all_1min.pkl",
+            "df_ictalVspreictal": "df_ictal_Vs_Preictal_1min.pkl"
         },
 
         # ------------------------------------------------------
@@ -66,8 +66,8 @@ def create_feature_extraction_config():
         # OUTPUT FILES
         # ------------------------------------------------------
         "output_files": {
-            "df_features_all": "df_features_all.pkl",
-            "df_features_ictalVspreictal": "df_features_ictal_Vs_Preictal.pkl"
+            "df_features_all": "df_FEATURES_all_1min.pkl",
+            "df_features_ictalVspreictal": "df_FEATURES_ictal_Vs_Preictal_1min.pkl"
         },
 
         # ------------------------------------------------------
@@ -91,7 +91,7 @@ def create_feature_extraction_config():
     # ----------------------------------------------------------
     # SAVE JSON FILE
     # ----------------------------------------------------------
-    config_path = Path("configs/config_XB47Y_feature_extraction.json")
+    config_path = Path("configs/config_XB47Y_feature_extraction_1min_30042026.json")
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(config_path, "w") as f:
