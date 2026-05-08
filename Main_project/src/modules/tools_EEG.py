@@ -367,7 +367,268 @@ def plot_eeg_availability_with_onsetsV2_1_4(
         plt.close()
 
     return df_captured_onsets
+import os
+from typing import Optional
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
+
+def plot_eeg_availability_with_onsetsV2_1_5(
+    df_files: pd.DataFrame, 
+    df_onsets: pd.DataFrame, 
+    output_path: Optional[str] = None,
+    pdf_output_path: Optional[str] = None,
+    plots_per_page: int = 10,
+    show_plot: bool = True
+) -> pd.DataFrame:
+    """
+    Plots daily EEG recording availability, overlays seizure onsets,
+    shows total daily hours, lists matched onset times in the plot,
+    and optionally saves:
+    
+    1. A full PNG figure.
+    2. A paginated PDF with a fixed number of daily plots per page.
+
+    Args:
+        df_files (pd.DataFrame): DataFrame containing EEG file metadata with T0 and TF columns.
+        df_onsets (pd.DataFrame): DataFrame containing seizure onset times in an 'onset' column.
+        output_path (Optional[str]): Path to save the full PNG figure.
+        pdf_output_path (Optional[str]): Path to save the paginated PDF.
+        plots_per_page (int): Number of daily plots per PDF page.
+        show_plot (bool): Whether to display the full PNG-style figure.
+
+    Returns:
+        pd.DataFrame: DataFrame containing only captured seizure onsets.
+    """
+
+    # ==========================================================
+    # 0) Prepare data
+    # ==========================================================
+    df_files = df_files.copy()
+    df_onsets = df_onsets.copy()
+    
+    df_files["T0"] = pd.to_datetime(df_files["T0"])
+    df_files["TF"] = pd.to_datetime(df_files["TF"])
+    df_onsets["onset"] = pd.to_datetime(df_onsets["onset"])
+
+    df_files = df_files.sort_values("T0")
+    df_onsets = df_onsets.sort_values("onset")
+
+    # ==========================================================
+    # 1) Match each onset to the previous file start time
+    # ==========================================================
+    matched_df = pd.merge_asof(
+        df_onsets, 
+        df_files, 
+        left_on="onset", 
+        right_on="T0", 
+        direction="backward"
+    )
+
+    matched_df["captured"] = (
+        (matched_df["onset"] >= matched_df["T0"]) &
+        (matched_df["onset"] <= matched_df["TF"])
+    )
+    
+    df_captured_onsets = matched_df[matched_df["captured"] == True].copy()
+
+    # ==========================================================
+    # 2) Build binary EEG presence state
+    # ==========================================================
+    events = []
+
+    for _, row in df_files.iterrows():
+        events.append((row["T0"], +1))
+        events.append((row["TF"], -1))
+
+    events_df = pd.DataFrame(events, columns=["Time", "Delta"]).sort_values("Time")
+
+    events_df = (
+        events_df
+        .groupby("Time", as_index=False)["Delta"]
+        .sum()
+        .sort_values("Time")
+    )
+
+    events_df["State"] = events_df["Delta"].cumsum()
+    events_df["Presence"] = (events_df["State"] > 0).astype(int)
+    events_df["DayStart"] = events_df["Time"].dt.floor("D")
+    
+    unique_days = sorted(events_df["DayStart"].unique())
+
+    # ==========================================================
+    # Helper function to plot one day in one axis
+    # ==========================================================
+    def plot_single_day(ax, start_day):
+        start_day = pd.Timestamp(start_day)
+        end_day = start_day + pd.Timedelta(days=1)
+
+        day_data = events_df[
+            (events_df["Time"] >= start_day) &
+            (events_df["Time"] < end_day)
+        ].copy()
+
+        # State at the beginning of the day
+        prev_state = events_df.loc[events_df["Time"] < start_day, "State"]
+        presence_at_start = int(prev_state.iloc[-1] > 0) if not prev_state.empty else 0
+
+        boundary_points = pd.DataFrame({
+            "Time": [start_day, end_day],
+            "Presence": [presence_at_start, None]
+        })
+
+        day_data = (
+            pd.concat(
+                [day_data[["Time", "Presence"]], boundary_points],
+                ignore_index=True
+            )
+            .sort_values("Time")
+        )
+
+        day_data["Presence"] = day_data["Presence"].ffill().astype(int)
+
+        # Calculate total recording duration for that day
+        day_data["Duration"] = day_data["Time"].diff().shift(-1)
+        total_duration_td = day_data.loc[day_data["Presence"] == 1, "Duration"].sum()
+        total_hours = total_duration_td.total_seconds() / 3600
+
+        # Identify onsets for that day
+        day_onsets = matched_df[
+            (matched_df["onset"] >= start_day) &
+            (matched_df["onset"] < end_day)
+        ]
+
+        captured_list = []
+
+        for _, s_row in day_onsets.iterrows():
+            color = "red" if s_row["captured"] else "gray"
+
+            ax.axvline(
+                s_row["onset"],
+                color=color,
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.8
+            )
+            
+            if s_row["captured"]:
+                captured_list.append(s_row["onset"].strftime("%H:%M:%S"))
+
+        # Plot EEG availability
+        ax.step(
+            day_data["Time"],
+            day_data["Presence"],
+            where="post",
+            color="steelblue",
+            linewidth=2
+        )
+
+        ax.fill_between(
+            day_data["Time"],
+            day_data["Presence"],
+            step="post",
+            alpha=0.2,
+            color="steelblue"
+        )
+
+        ax.set_title(
+            f"Date: {start_day.date()} | Total Recording: {total_hours:.2f} hrs",
+            loc="left",
+            fontweight="bold",
+            fontsize=12
+        )
+
+        if captured_list:
+            onset_text = "Captured Onsets:\n" + "\n".join(captured_list)
+
+            ax.text(
+                1.01,
+                0.5,
+                onset_text,
+                transform=ax.transAxes,
+                fontsize=9,
+                verticalalignment="center",
+                color="red",
+                bbox=dict(
+                    facecolor="white",
+                    alpha=0.6,
+                    edgecolor="red"
+                )
+            )
+
+        ax.set_ylim(-0.1, 1.1)
+        ax.set_xlim(start_day, end_day)
+        ax.set_ylabel("Presence")
+
+    # ==========================================================
+    # 3) Save full PNG figure, same logic as your original version
+    # ==========================================================
+    fig, axes = plt.subplots(
+        len(unique_days),
+        1,
+        figsize=(14, 3 * len(unique_days)),
+        sharey=True,
+        constrained_layout=True
+    )
+
+    if len(unique_days) == 1:
+        axes = [axes]
+
+    for ax, start_day in zip(axes, unique_days):
+        plot_single_day(ax, start_day)
+
+    axes[-1].set_xlabel("Time (HH:MM)")
+
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"PNG saved to: {output_path}")
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+    # ==========================================================
+    # 4) Save paginated PDF, 10 plots per page by default
+    # ==========================================================
+    if pdf_output_path:
+        pdf_output_dir = os.path.dirname(pdf_output_path)
+
+        if pdf_output_dir:
+            os.makedirs(pdf_output_dir, exist_ok=True)
+
+        with PdfPages(pdf_output_path) as pdf:
+            for i in range(0, len(unique_days), plots_per_page):
+                days_subset = unique_days[i:i + plots_per_page]
+
+                fig_pdf, axes_pdf = plt.subplots(
+                    len(days_subset),
+                    1,
+                    figsize=(14, 3 * len(days_subset)),
+                    sharey=True,
+                    constrained_layout=True
+                )
+
+                if len(days_subset) == 1:
+                    axes_pdf = [axes_pdf]
+
+                for ax, start_day in zip(axes_pdf, days_subset):
+                    plot_single_day(ax, start_day)
+
+                axes_pdf[-1].set_xlabel("Time (HH:MM)")
+
+                pdf.savefig(fig_pdf, bbox_inches="tight")
+                plt.close(fig_pdf)
+
+        print(f"PDF saved to: {pdf_output_path}")
+
+    return df_captured_onsets
 #=================================================================================
 #=================================================================================
 #=================================================================================
