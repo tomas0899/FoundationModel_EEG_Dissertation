@@ -1,0 +1,42 @@
+{
+    "experiment_id": "RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505",
+    "created_at": "2026-05-05T20:11:27",
+    "date_code": "20260505",
+    "patient_id": "RQXZ1",
+    "paths": {
+        "input_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/RQXZ1",
+        "seizure_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/RQXZ1/RQXZ1_seizures.xlsx",
+        "output_root_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing",
+        "experiment_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505",
+        "map_output_path": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/maps/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505_seizure_availability_map.png",
+        "npz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/npz",
+        "viz_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/visualizations"
+    },
+    "naming": {
+        "input_name": "RQXZ1",
+        "amp_code": "AMP200",
+        "bandpass_code": "BP0p5-48Hz",
+        "notch_code": "NOTCH34p5Hz",
+        "zscore_code": "NOZSCORE"
+    },
+    "filtering": {
+        "amp_threshold": 200.0,
+        "lowcut": 0.5,
+        "highcut": 48.0,
+        "order": 4,
+        "do_zscore": false,
+        "notch_freq": 34.5
+    },
+    "plotting": {
+        "show_plot": true,
+        "channel_idx_1": 0,
+        "channel_idx_2": 1,
+        "window_sec": 10,
+        "n_windows": 12,
+        "pre_onset_sec": 60,
+        "vertical_offset_uv": 100
+    },
+    "inspection": {
+        "target_date": "2019-12-11"
+    }
+}

@@ -92,32 +92,44 @@ def build_experiment_id(
 # ==========================================================
 # USER-DEFINED SETTINGS
 # ==========================================================
+#CG
+# ----------------------------------------------------------
+# PATIENT INFORMATION
+# ----------------------------------------------------------
+# ==========================================================
+# USER-DEFINED SETTINGS
+# ==========================================================
 
 # ----------------------------------------------------------
 # PATIENT INFORMATION
 # ----------------------------------------------------------
-patient_id = "XB47Y"
+# The user only needs to change this value.
+patient_id = "ZBJBD"
 
 # ----------------------------------------------------------
-# INPUT PATHS
+# PROJECT ROOTS
 # ----------------------------------------------------------
-input_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/"
+project_root = Path("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project")
 
-seizure_file = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/data/Working/XB47Y/XB47Y_seizures.xlsx"
+working_data_root = project_root / "data" / "Working"
+results_root = project_root / "results"
 
 # ----------------------------------------------------------
-# USER-DEFINED OUTPUT ROOT DIRECTORY
+# AUTOMATIC INPUT PATHS
 # ----------------------------------------------------------
-# The user chooses ONLY this folder.
-# The script will automatically create a subfolder inside it
-# using the generated experiment_id.
-output_root_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/XB47Y/Pre_processing"
+input_dir = working_data_root / patient_id
+
+seizure_file = input_dir / f"{patient_id}_seizures.xlsx"
+
+# ----------------------------------------------------------
+# AUTOMATIC OUTPUT ROOT DIRECTORY
+# ----------------------------------------------------------
+output_root_dir = results_root / patient_id / "Pre_processing"
 
 # ----------------------------------------------------------
 # CONFIG OUTPUT DIRECTORY
 # ----------------------------------------------------------
-# Folder where the generated JSON config will be saved.
-config_output_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/src/pipelines/1_Pre_process/configs"
+config_output_dir = project_root / "src" / "pipelines" / "1_Pre_process" / "configs"
 
 
 # ==========================================================
