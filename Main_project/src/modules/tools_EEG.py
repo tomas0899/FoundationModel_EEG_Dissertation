@@ -377,7 +377,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 def plot_eeg_availability_with_onsetsV2_1_5(
     df_files: pd.DataFrame, 
     df_onsets: pd.DataFrame, 
-    output_path: Optional[str] = None,
     pdf_output_path: Optional[str] = None,
     plots_per_page: int = 10,
     show_plot: bool = True
@@ -562,7 +561,7 @@ def plot_eeg_availability_with_onsetsV2_1_5(
         ax.set_ylabel("Presence")
 
     # ==========================================================
-    # 3) Save full PNG figure, same logic as your original version
+    # 3) Optional display of the full figure
     # ==========================================================
     fig, axes = plt.subplots(
         len(unique_days),
@@ -580,14 +579,7 @@ def plot_eeg_availability_with_onsetsV2_1_5(
 
     axes[-1].set_xlabel("Time (HH:MM)")
 
-    if output_path:
-        output_dir = os.path.dirname(output_path)
 
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"PNG saved to: {output_path}")
 
     if show_plot:
         plt.show()
