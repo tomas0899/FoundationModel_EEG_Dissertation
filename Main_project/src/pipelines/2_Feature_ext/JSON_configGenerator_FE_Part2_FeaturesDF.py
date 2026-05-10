@@ -186,15 +186,14 @@ def create_feature_extraction_config():
     previous_labeling_config_path = (
         "/home/tperezsanchez/FoundationModel_EEG_Dissertation/"
         "Main_project/src/pipelines/2_Feature_ext/configs/"
-        "config_XB47Y_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260504_v01.json"
+        "config_RQXZ1_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260510_v01.json"
     )
-
     # ------------------------------------------------------
     # OUTPUT ROOT FOLDER
     # ------------------------------------------------------
     output_root_dir = (
         "/home/tperezsanchez/FoundationModel_EEG_Dissertation/"
-        "Main_project/results/XB47Y/Feature_ext/Part2_features"
+        "Main_project/results/RQXZ1/Feature_ext/Part2_features"
     )
 
     # ------------------------------------------------------
