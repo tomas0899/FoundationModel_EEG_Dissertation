@@ -1,0 +1,46 @@
+{
+    "experiment_id": "RQXZ1_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260510",
+    "created_at": "2026-05-10T11:23:10",
+    "date_code": "20260510",
+    "patient_id": "RQXZ1",
+    "paths": {
+        "input_npz_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/npz",
+        "example_npz_file": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/npz/RQXZ1_1_preproc_full.npz",
+        "output_root_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing",
+        "experiment_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260510",
+        "normalized_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260510/normalized_npz",
+        "logs_output_dir": "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260510/logs"
+    },
+    "naming": {
+        "input_name": "npz",
+        "normalization_code": "GLOBALCH-NORM",
+        "channel_code": "CH2",
+        "eps_code": "EPS1e-08",
+        "date_code": "20260510"
+    },
+    "file_selection": {
+        "file_pattern": "*.npz"
+    },
+    "normalization": {
+        "normalization_type": "GLOBALCH-NORM",
+        "expected_n_channels": 2,
+        "eps": 1e-08,
+        "allow_pickle": true,
+        "metadata_keys": [
+            "mu",
+            "sigma",
+            "fs",
+            "channel_names",
+            "source_file",
+            "seizure_onsets",
+            "T0",
+            "TF"
+        ]
+    },
+    "pipeline_steps": {
+        "inspect_example_file": true,
+        "compute_global_channel_stats": true,
+        "apply_global_normalization": true,
+        "run_sanity_check": true
+    }
+}
