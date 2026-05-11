@@ -96,23 +96,23 @@ def build_experiment_id(
 # ----------------------------------------------------------
 # PATIENT INFORMATION
 # ----------------------------------------------------------
-patient_id = "RQXZ1"
+patient_id = "JYXFE"
 
 # ----------------------------------------------------------
 # INPUT PATHS
 # ----------------------------------------------------------
 # Folder containing the original/non-normalized .npz files
-input_npz_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/npz"
+input_npz_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/JYXFE/Pre_processing/JYXFE_IN-JYXFE_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260511/npz"
 
 # Example .npz file used only for inspection
-example_npz_file = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-RQXZ1_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260505/npz/RQXZ1_1_preproc_full.npz"
+example_npz_file = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/JYXFE/Pre_processing/JYXFE_IN-JYXFE_AMP200_BP0p5-48Hz_NOTCH34p5Hz_NOZSCORE_20260511/npz/JYXFE_1_preproc_full.npz"
 
 # ----------------------------------------------------------
 # USER-DEFINED OUTPUT ROOT DIRECTORY
 # ----------------------------------------------------------
 # The user chooses ONLY this folder.
 # The script will create a subfolder inside it using experiment_id.
-output_root_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing"
+output_root_dir = "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/JYXFE/Pre_processing"
 
 # ----------------------------------------------------------
 # CONFIG OUTPUT DIRECTORY
@@ -172,7 +172,33 @@ pipeline_steps = {
     "run_sanity_check": True
 }
 
+# ==========================================================
+# SEIZURE VISUALIZATION PARAMETERS
+# ==========================================================
 
+seizure_visualization = {
+    # Whether to generate one PDF/plot per seizure file
+    "run_visualization": True,
+
+    # Directory that will be used as input for visualization.
+    # In this case, we visualize the normalized .npz files.
+    "visualization_input_dir": "normalized_output_dir",
+
+    # File suffix used to select files for visualization
+    "file_suffix": "_preproc_full.npz",
+
+    # Channels to plot
+    "channel_idx_1": 0,
+    "channel_idx_2": 1,
+
+    # Windowing around seizure onset
+    "window_sec": 10,
+    "n_windows": 12,
+    "pre_onset_sec": 60,
+
+    # Vertical offset between channels
+    "vertical_offset_uv": 20.0
+}
 # ==========================================================
 # AUTOMATIC NAMING
 # ==========================================================
@@ -197,12 +223,12 @@ normalized_output_dir = experiment_output_dir / "normalized_npz"
 
 # Optional folder for logs or sanity-check outputs
 logs_output_dir = experiment_output_dir / "logs"
-
+viz_output_dir = experiment_output_dir / "seizure_visualizations"
 # Create directories
 experiment_output_dir.mkdir(parents=True, exist_ok=True)
 normalized_output_dir.mkdir(parents=True, exist_ok=True)
 logs_output_dir.mkdir(parents=True, exist_ok=True)
-
+viz_output_dir.mkdir(parents=True, exist_ok=True)
 
 # ==========================================================
 # DEFINE CONFIG DICTIONARY
@@ -227,12 +253,13 @@ config = {
     "paths": {
         "input_npz_dir": str(input_npz_dir),
         "example_npz_file": str(example_npz_file),
-
+    
         "output_root_dir": str(output_root_dir),
         "experiment_output_dir": str(experiment_output_dir),
-
+    
         "normalized_output_dir": str(normalized_output_dir),
-        "logs_output_dir": str(logs_output_dir)
+        "logs_output_dir": str(logs_output_dir),
+        "viz_output_dir": str(viz_output_dir)
     },
 
     # ------------------------------------------------------
@@ -259,9 +286,13 @@ config = {
     # ------------------------------------------------------
     # PIPELINE STEPS
     # ------------------------------------------------------
-    "pipeline_steps": pipeline_steps
-}
 
+    "pipeline_steps": pipeline_steps,
+
+# ------------------------------------------------------
+# SEIZURE VISUALIZATION PARAMETERS
+# ------------------------------------------------------
+    "seizure_visualization": seizure_visualization}
 
 # ==========================================================
 # SAVE JSON CONFIG FILE
@@ -287,3 +318,4 @@ print(experiment_output_dir)
 print("\nGenerated output paths:")
 print(f"Normalized NPZ output dir: {normalized_output_dir}")
 print(f"Logs output dir: {logs_output_dir}")
+print(f"Seizure visualization output dir: {viz_output_dir}")

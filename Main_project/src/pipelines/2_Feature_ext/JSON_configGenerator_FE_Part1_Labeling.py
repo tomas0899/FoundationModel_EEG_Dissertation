@@ -152,12 +152,12 @@ def create_labeling_config():
     # ------------------------------------------------------
     # PATIENT INFORMATION
     # ------------------------------------------------------
-    patient_id = "RQXZ1"
+    patient_id = "JYXFE"
 
     # ------------------------------------------------------
     # INPUT PATHS
     # ------------------------------------------------------
-    input_npz_dir = ("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Pre_processing/RQXZ1_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260510/normalized_npz"
+    input_npz_dir = ("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/JYXFE/Pre_processing/JYXFE_IN-npz_GLOBALCH-NORM_CH2_EPS1e-08_20260511/normalized_npz"
     )
 
     # ------------------------------------------------------
@@ -165,13 +165,13 @@ def create_labeling_config():
     # ------------------------------------------------------
     # The user chooses this folder.
     # The script will create a specific experiment folder inside it.
-    output_root_dir = ("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/RQXZ1/Feature_ext/Part1_labeling"
+    output_root_dir = ("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/results/JYXFE/Feature_ext/Part1_labeling"
     )
 
     # ------------------------------------------------------
     # CONFIG OUTPUT FOLDER
     # ------------------------------------------------------
-    config_output_dir = (   "/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/src/pipelines/2_Feature_ext/configs"
+    config_output_dir = ("/home/tperezsanchez/FoundationModel_EEG_Dissertation/Main_project/src/pipelines/2_Feature_ext/configs"
     )
 
     # ------------------------------------------------------

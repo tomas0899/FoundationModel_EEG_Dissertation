@@ -3,6 +3,7 @@ import sys
 import json
 import pandas as pd
 import numpy as np
+import os
 #==========================
 #==========================
 #==========================
@@ -87,10 +88,8 @@ if inspect_example_file:
     data = np.load(example_npz_file, allow_pickle=allow_pickle)
 
     print("Keys found:", list(data.keys()))
-
-# Ver qué claves tiene
-print("Claves encontradas:", list(data.keys()))
-# expected: Claves encontradas: ['X', 'mu', 'sigma', 'fs', 'channel_names', 'source_file', 'seizure_onsets', 'T0', 'TF']
+    
+# expected: key found ['X', 'mu', 'sigma', 'fs', 'channel_names', 'source_file', 'seizure_onsets', 'T0', 'TF']
 #==========================
 #==========================
 #==========================
@@ -169,33 +168,78 @@ if run_sanity_check:
 
     print("Sanity check completed")
     print(df_check.head())
+
 #=====================
 #==========================
 #==========================
 # 6. PDF per seizure:
-directory = npz_output_dir
-for file_name in sorted(os.listdir(directory)):
+# --------------------------
+# Seizure visualization parameters
+# --------------------------
+#=====================
 
-    if file_name.endswith("_preproc_full.npz"):
 
-        full_path = os.path.join(directory, file_name)
+# --------------------------
+# Seizure visualization parameters
+# --------------------------
+seizure_viz_config = config["seizure_visualization"]
 
-        print(f"\nProcessing: {file_name}")
+run_visualization = seizure_viz_config["run_visualization"]
+visualization_input_dir_key = seizure_viz_config["visualization_input_dir"]
+file_suffix = seizure_viz_config["file_suffix"]
 
-        
+channel_idx_1 = seizure_viz_config["channel_idx_1"]
+channel_idx_2 = seizure_viz_config["channel_idx_2"]
+window_sec = seizure_viz_config["window_sec"]
+n_windows = seizure_viz_config["n_windows"]
+pre_onset_sec = seizure_viz_config["pre_onset_sec"]
+vertical_offset_uv = seizure_viz_config["vertical_offset_uv"]
+
+viz_output_dir = Path(config["paths"]["viz_output_dir"])
+
+# Decide which directory to use as input for visualization
+if visualization_input_dir_key == "normalized_output_dir":
+    visualization_input_dir = normalized_output_dir
+elif visualization_input_dir_key == "input_npz_dir":
+    visualization_input_dir = input_npz_dir
+else:
+    visualization_input_dir = Path(visualization_input_dir_key)
+
+
+if run_visualization:
+    viz_output_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\nRunning seizure visualization")
+    print("Visualization input directory:", visualization_input_dir)
+    print("Visualization output directory:", viz_output_dir)
+
+    files_to_visualize = sorted(visualization_input_dir.glob(f"*{file_suffix}"))
+
+    print(f"Files selected for visualization: {len(files_to_visualize)}")
+
+    if len(files_to_visualize) == 0:
+        raise FileNotFoundError(
+            f"No files found in {visualization_input_dir} ending with {file_suffix}"
+        )
+
+    for npz_path in files_to_visualize:
+        print(f"\nProcessing: {npz_path.name}")
+
         TEEG.visualize_seizure_windows_from_npz_1_10VNormal(
-            npz_path=full_path,
+            npz_path=str(npz_path),
             channel_idx_1=channel_idx_1,
             channel_idx_2=channel_idx_2,
             window_sec=window_sec,
             n_windows=n_windows,
             pre_onset_sec=pre_onset_sec,
             vertical_offset_uv=vertical_offset_uv,
-            output_dir=viz_output_dir
+            output_dir=str(viz_output_dir)
         )
 
+    print("\nSeizure visualization completed")
+print("\nPipeline summary:")
 print("patient_id:", patient_id)
-print("input_dir:", input_dir)
-print("seizure_file:", seizure_file)
-print("npz_output_dir:", npz_output_dir)
+print("input_npz_dir:", input_npz_dir)
+print("example_npz_file:", example_npz_file)
+print("normalized_output_dir:", normalized_output_dir)
 print("viz_output_dir:", viz_output_dir)
