@@ -104,7 +104,7 @@ def build_experiment_id(
 # PATIENT INFORMATION
 # ----------------------------------------------------------
 # The user only needs to change this value.
-patient_id = "ZBJBD"
+patient_id = "JYXFE"
 
 # ----------------------------------------------------------
 # PROJECT ROOTS
@@ -195,17 +195,19 @@ experiment_output_dir = Path(output_root_dir) / experiment_id
 npz_output_dir = experiment_output_dir / "npz"
 viz_output_dir = experiment_output_dir / "visualizations"
 maps_output_dir = experiment_output_dir / "maps"
-
+qc_output_dir = experiment_output_dir / "qc"
 # Create directories
 experiment_output_dir.mkdir(parents=True, exist_ok=True)
 npz_output_dir.mkdir(parents=True, exist_ok=True)
 viz_output_dir.mkdir(parents=True, exist_ok=True)
 maps_output_dir.mkdir(parents=True, exist_ok=True)
-
+qc_output_dir.mkdir(parents=True, exist_ok=True)
 # Automatically generated output files
-map_output_path = maps_output_dir / f"{experiment_id}_seizure_availability_map.png"
+map_output_path = maps_output_dir / f"{experiment_id}_seizure_availability_map.pdf"
 
+daily_histogram_pdf_path = qc_output_dir / f"{experiment_id}_daily_recording_histogram.pdf"
 
+recording_onset_summary_csv_path = qc_output_dir / f"{experiment_id}_recording_onset_summary.csv"
 # ==========================================================
 # DEFINE CONFIG DICTIONARY
 # ==========================================================
@@ -235,7 +237,8 @@ config = {
 
         "map_output_path": str(map_output_path),
         "npz_output_dir": str(npz_output_dir),
-        "viz_output_dir": str(viz_output_dir)
+        "viz_output_dir": str(viz_output_dir),
+        "qc_output_dir": str(qc_output_dir)
     },
 
     # ------------------------------------------------------
@@ -262,6 +265,22 @@ config = {
     # PLOTTING PARAMETERS
     # ------------------------------------------------------
     "plotting": plotting,
+# ------------------------------------------------------
+# QC OUTPUTS
+# ------------------------------------------------------
+"daily_recording_histogram": {
+    "save_pdf": True,
+    "pdf_output_path": str(daily_histogram_pdf_path)
+},
+
+"recording_onset_summary": {
+    "save_csv": True,
+    "output_dir": str(qc_output_dir),
+    "output_filename": recording_onset_summary_csv_path.name,
+    "t0_col": "T0",
+    "tf_col": "TF",
+    "onset_col": "onset"
+},
 
     # ------------------------------------------------------
     # OPTIONAL INSPECTION PARAMETERS

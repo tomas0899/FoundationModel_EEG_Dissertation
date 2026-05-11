@@ -15,6 +15,7 @@ from scipy.signal import welch
 import glob
 from scipy.signal import iirnotch, tf2sos
 from scipy.signal import butter, sosfiltfilt, iirnotch, tf2sos
+from pathlib import Path
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -120,7 +121,7 @@ def process_eeg_mat_files_1_1(folder_path: str) -> Tuple[pd.DataFrame, list]:
 #=================================================================================
 #=================================================================================
 # FUNCTION #2 
-def plot_daily_recording_histogram_1_2(df, patient_id="Unknown"):
+def plot_daily_recording_histogram_1_2(df, patient_id="Unknown", pdf_output_path=None):    
     """
     Groups recording data by day, calculates statistics, and plots a histogram 
     of total accumulated hours per day.
@@ -171,10 +172,137 @@ def plot_daily_recording_histogram_1_2(df, patient_id="Unknown"):
     plt.grid(axis='y', linestyle=':', alpha=0.7)
 
     plt.tight_layout()
+    if pdf_output_path is not None:
+        pdf_output_path = Path(pdf_output_path)
+        pdf_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        plt.savefig(
+            pdf_output_path,
+            format="pdf",
+            bbox_inches="tight"
+        )
+    
+        print(f"PDF saved to: {pdf_output_path}")
     plt.show()
 
 # --- Example Usage ---
 # plot_daily_recording_histogram(df_XB47Y, patient_id="XB47Y")
+def save_recording_onset_summary_1_2_1(
+    df_files,
+    df_onsets,
+    patient_id="Unknown",
+    output_dir=".",
+    output_filename=None,
+    t0_col="T0",
+    tf_col="TF",
+    onset_col="onset"
+):
+    """
+    Creates and saves a CSV summary comparing EEG recording files and seizure onsets.
+
+    The output CSV includes:
+    - Number of recording files
+    - Number of seizure onsets
+    - First and last recording timestamps
+    - First and last onset timestamps
+    - Number of onsets per day
+
+    Args:
+        df_files (pd.DataFrame): DataFrame containing EEG file metadata.
+        df_onsets (pd.DataFrame): DataFrame containing seizure onset information.
+        patient_id (str): Patient identifier.
+        output_dir (str or Path): Directory where the CSV will be saved.
+        output_filename (str, optional): Name of the output CSV file.
+        t0_col (str): Column name for recording start time.
+        tf_col (str): Column name for recording end time.
+        onset_col (str): Column name for seizure onset time.
+
+    Returns:
+        pd.DataFrame: Summary DataFrame saved as CSV.
+    """
+
+    # --- 1. Prepare output path ---
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if output_filename is None:
+        output_filename = f"{patient_id}_recording_onset_summary.csv"
+
+    output_path = output_dir / output_filename
+
+    # --- 2. Convert date columns ---
+    df_files = df_files.copy()
+    df_onsets = df_onsets.copy()
+
+    df_files[t0_col] = pd.to_datetime(df_files[t0_col])
+    df_files[tf_col] = pd.to_datetime(df_files[tf_col])
+    df_onsets[onset_col] = pd.to_datetime(df_onsets[onset_col])
+
+    # --- 3. General summary ---
+    summary_rows = [
+        {
+            "patient_id": patient_id,
+            "section": "recording_summary",
+            "metric": "number_of_files",
+            "value": len(df_files)
+        },
+        {
+            "patient_id": patient_id,
+            "section": "onset_summary",
+            "metric": "number_of_onsets",
+            "value": len(df_onsets)
+        },
+        {
+            "patient_id": patient_id,
+            "section": "recording_summary",
+            "metric": "first_T0",
+            "value": df_files[t0_col].min()
+        },
+        {
+            "patient_id": patient_id,
+            "section": "recording_summary",
+            "metric": "last_TF",
+            "value": df_files[tf_col].max()
+        },
+        {
+            "patient_id": patient_id,
+            "section": "onset_summary",
+            "metric": "first_onset",
+            "value": df_onsets[onset_col].min()
+        },
+        {
+            "patient_id": patient_id,
+            "section": "onset_summary",
+            "metric": "last_onset",
+            "value": df_onsets[onset_col].max()
+        }
+    ]
+
+    # --- 4. Onsets per day ---
+    onsets_per_day = (
+        df_onsets[onset_col]
+        .dt.date
+        .value_counts()
+        .sort_index()
+    )
+
+    for date, count in onsets_per_day.items():
+        summary_rows.append(
+            {
+                "patient_id": patient_id,
+                "section": "onsets_per_day",
+                "metric": str(date),
+                "value": count
+            }
+        )
+
+    # --- 5. Save CSV ---
+    df_summary = pd.DataFrame(summary_rows)
+    df_summary.to_csv(output_path, index=False)
+
+    print(f"Recording/onset summary CSV saved to: {output_path}")
+
+    return df_summary
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -1688,6 +1816,178 @@ def visualize_seizure_windows_from_npz_1_10V3(
             ax.set_xlim(0, window_sec)
             ax.set_xlabel("Time within window (s)")
             ax.set_ylabel("Amplitude (µV)")
+            ax.set_title(
+                f"Seizure {s_idx} | Window {w+1}/{n_windows} | "
+                f"{window_start_dt} to {window_end_dt} | "
+                f"rel. to onset: {rel_start_sec:.1f}s to {rel_end_sec:.1f}s"
+            )
+
+            if w == 0:
+                ax.legend(loc="upper right", fontsize=8)
+
+        fig.suptitle(
+            f"{source_file} | Seizure {s_idx} | Onset: {onset_dt} | "
+            f"Start plotting {pre_onset_sec}s before onset",
+            y=1.02,
+            fontsize=12
+        )
+
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    pdf.close()
+    print(f"Saved PDF: {pdf_path}")
+def visualize_seizure_windows_from_npz_1_10VNormal(
+    npz_path: str,
+    channel_idx_1: int = 0,
+    channel_idx_2: int = 1,
+    window_sec: int = 10,
+    n_windows: int = 11,   
+    pre_onset_sec: int = 60,
+    vertical_offset_uv: float = 100.0,
+    output_dir: str = "."
+):
+    """
+    Visualiza segmentos consecutivos de EEG alrededor de cada seizure onset.
+
+    Modificaciones:
+    - Ambos canales se plotean en el mismo subplot por ventana
+    - channel_idx_2 se desplaza verticalmente +vertical_offset_uv
+    - El ploteo empieza pre_onset_sec antes del onset
+    - Se agrega sombreado amarillo suave de 2 s desde el onset
+    """
+
+    data = np.load(npz_path, allow_pickle=True)
+
+    X = data["X"]                     # shape: (C, N)
+    fs = float(data["fs"])
+    seizure_onsets = data["seizure_onsets"]
+    T0 = data["T0"][0]
+    source_file = str(data["source_file"][0])
+
+    # --- limpiar onsets inválidos ---
+    seizure_onsets_clean = []
+    
+    for s in seizure_onsets:
+        if s is None:
+            continue
+        s_str = str(s).strip().lower()
+        if s_str == "nan" or s_str == "":
+            continue
+        seizure_onsets_clean.append(s)
+    
+    # si no hay seizures válidos → omitir archivo
+    if len(seizure_onsets_clean) == 0:
+        print(f"{os.path.basename(npz_path)} → no seizures, skipping.")
+        return
+
+    if channel_idx_1 < 0 or channel_idx_1 >= X.shape[0]:
+        raise ValueError(f"channel_idx_1={channel_idx_1} out of bounds for X with shape {X.shape}")
+
+    if channel_idx_2 < 0 or channel_idx_2 >= X.shape[0]:
+        raise ValueError(f"channel_idx_2={channel_idx_2} out of bounds for X with shape {X.shape}")
+
+    T0_str = str(T0)
+
+    # Corrige formato tipo "2019-11-0107:43:13.000000"
+    if len(T0_str) >= 11 and T0_str[10] != " ":
+        T0_str = T0_str[:10] + " " + T0_str[10:]
+
+    T0_dt = _parse_compact_datetime_str(T0_str)
+
+    window_samples = int(window_sec * fs)
+    pre_onset_samples = int(pre_onset_sec * fs)
+    total_samples = window_samples * n_windows
+
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(npz_path))[0]
+    pdf_path = os.path.join(output_dir, f"{base_name}_seizures_overlay.pdf")
+    pdf = PdfPages(pdf_path)
+
+    for s_idx, onset_str in enumerate(seizure_onsets_clean):
+        onset_dt = _parse_compact_datetime_str(onset_str)
+
+        # posición del onset en samples
+        delta_sec = (onset_dt - T0_dt).total_seconds()
+        onset_sample = int(round(delta_sec * fs))
+
+        # arrancar pre_onset_sec antes del onset
+        plot_start_sample = onset_sample - pre_onset_samples
+        plot_end_sample = plot_start_sample + total_samples
+
+        if plot_start_sample < 0 or plot_end_sample > X.shape[1]:
+            print(f"Seizure {s_idx}: out of bounds, skipping.")
+            continue
+
+        print(
+            f"[{source_file}] Seizure {s_idx} | "
+            f"Onset: {onset_dt} | "
+            f"onset_sample={onset_sample} | "
+            f"plot_start={plot_start_sample} | "
+            f"channels=({channel_idx_1}, {channel_idx_2})"
+        )
+
+        fig, axes = plt.subplots(n_windows, 1, figsize=(16, 2.8 * n_windows), sharex=False)
+
+        if n_windows == 1:
+            axes = np.array([axes])
+
+        for w in range(n_windows):
+            start = plot_start_sample + w * window_samples
+            end = start + window_samples
+
+            segment_1 = X[channel_idx_1, start:end]
+            segment_2 = X[channel_idx_2, start:end] + vertical_offset_uv
+
+            # tiempo relativo dentro de la ventana
+            t_sec = np.arange(len(segment_1)) / fs
+
+            # tiempo absoluto de inicio/fin de la ventana
+            window_start_dt = T0_dt + pd.to_timedelta(start / fs, unit="s")
+            window_end_dt   = T0_dt + pd.to_timedelta(end / fs, unit="s")
+
+            # tiempo relativo al onset
+            rel_start_sec = (start - onset_sample) / fs
+            rel_end_sec   = (end - onset_sample) / fs
+
+            ax = axes[w]
+
+            # sombreado amarillo suave de 2 s desde el onset, si cae en esta ventana
+            # Mark the exact seizure onset time if it falls inside this window
+            onset_in_window_sec = (onset_dt - window_start_dt).total_seconds()
+            
+            if 0 <= onset_in_window_sec <= window_sec:
+            
+                shade_end = min(onset_in_window_sec + 2.0, window_sec)
+            
+                ax.axvspan(
+                    onset_in_window_sec,
+                    shade_end,
+                    color="gold",
+                    alpha=0.22,
+                    zorder=0,
+                    label="Onset + 2 s"
+                )
+            
+                ax.axvline(
+                    onset_in_window_sec,
+                    color="red",
+                    linestyle="--",
+                    linewidth=1.2,
+                    alpha=0.9,
+                    label=f"Onset at {onset_in_window_sec:.2f}s"
+                )
+            ax.plot(t_sec, segment_1, color="blue", linewidth=0.8, label=f"Ch {channel_idx_1}")
+            ax.plot(t_sec, segment_2, color="red", linewidth=0.8, label=f"Ch {channel_idx_2} (+{vertical_offset_uv:.0f} µV)")
+
+            # líneas guía
+            ax.axhline(0, color="blue", linestyle="--", linewidth=0.6, alpha=0.7)
+            ax.axhline(vertical_offset_uv, color="red", linestyle="--", linewidth=0.6, alpha=0.7)
+
+            ax.set_xlim(0, window_sec)
+            ax.set_xlabel("Time within window (s)")
+            ax.set_ylabel("Z-score")
             ax.set_title(
                 f"Seizure {s_idx} | Window {w+1}/{n_windows} | "
                 f"{window_start_dt} to {window_end_dt} | "

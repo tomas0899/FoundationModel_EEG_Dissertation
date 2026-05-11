@@ -169,3 +169,33 @@ if run_sanity_check:
 
     print("Sanity check completed")
     print(df_check.head())
+#=====================
+#==========================
+#==========================
+# 6. PDF per seizure:
+directory = npz_output_dir
+for file_name in sorted(os.listdir(directory)):
+
+    if file_name.endswith("_preproc_full.npz"):
+
+        full_path = os.path.join(directory, file_name)
+
+        print(f"\nProcessing: {file_name}")
+
+        
+        TEEG.visualize_seizure_windows_from_npz_1_10VNormal(
+            npz_path=full_path,
+            channel_idx_1=channel_idx_1,
+            channel_idx_2=channel_idx_2,
+            window_sec=window_sec,
+            n_windows=n_windows,
+            pre_onset_sec=pre_onset_sec,
+            vertical_offset_uv=vertical_offset_uv,
+            output_dir=viz_output_dir
+        )
+
+print("patient_id:", patient_id)
+print("input_dir:", input_dir)
+print("seizure_file:", seizure_file)
+print("npz_output_dir:", npz_output_dir)
+print("viz_output_dir:", viz_output_dir)
