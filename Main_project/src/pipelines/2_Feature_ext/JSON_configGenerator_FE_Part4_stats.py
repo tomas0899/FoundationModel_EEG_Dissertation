@@ -14,14 +14,14 @@ from datetime import datetime
 # ============================================================
 
 
-patient_id = "10OXG"
+patient_id = "1JSZ6"
 
 project_root = Path("/home/tperezsanchez/Tomas_PS_DissertationKCL2026/Main_project")
 
 experiment_id = (
     f"{patient_id}_IN-normalized_npz_FP-fullnpz_W10s_"
     "PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_"
-    "20260612_v01_FEAT-TIME-FREQ_20260612_v01"
+    "20260612_v01_FEAT-TIME-FREQ_20260615_v01"
 )
 
 input_pkl_path = (
@@ -31,7 +31,7 @@ input_pkl_path = (
     / "Feature_ext"
     / "Part2_features"
     / experiment_id
-    / f"{experiment_id}_df_features_ictalVspreictal_dropExcluded_dropNaNrows.pkl"
+    / f"{experiment_id}_df_features_ictalVspreictal.pkl"
 )
 
 output_dir = (

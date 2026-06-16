@@ -28,7 +28,7 @@ import json
 # ============================================================
 
 USER_INFO = {
-    "patient_id": "10OXG",
+    "patient_id": "1JSZ6",
     "experiment_name": "features_to_pca",
     "version": "v01"
 }
@@ -53,12 +53,12 @@ INPUTS = {
         / PATIENT_ID
         / "Feature_ext"
         / "Part2_features"
-        / "10OXG_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01_FEAT-TIME-FREQ_20260612_v01"
+        / "1JSZ6_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01_FEAT-TIME-FREQ_20260615_v01"
     ),
 
     # Feature dataframe filename
     "features_pickle_name": (
-        "10OXG_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01_FEAT-TIME-FREQ_20260612_v01_df_features_ictalVspreictal_dropExcluded_dropNaNrows.pkl"
+        "1JSZ6_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01_FEAT-TIME-FREQ_20260615_v01_df_features_ictalVspreictal.pkl"
     ),
 
     # Input type expected by the PCA pipeline

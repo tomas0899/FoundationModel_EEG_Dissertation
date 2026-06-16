@@ -185,16 +185,15 @@ def create_feature_extraction_config():
     # ------------------------------------------------------
     previous_labeling_config_path = (
         "/home/tperezsanchez/Tomas_PS_DissertationKCL2026/"
-        "Main_project/src/pipelines/2_Feature_ext/configs/10OXG/"
-        "config_10OXG_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01.json"
+        "Main_project/src/pipelines/2_Feature_ext/configs/1JSZ6/"
+        "config_1JSZ6_IN-normalized_npz_FP-fullnpz_W10s_PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_20260612_v01.json"
     )
-
     # ------------------------------------------------------
     # OUTPUT ROOT FOLDER
     # ------------------------------------------------------
     output_root_dir = (
         "/home/tperezsanchez/Tomas_PS_DissertationKCL2026/"
-        "Main_project/results/10OXG/Feature_ext/Part2_features"
+        "Main_project/results/1JSZ6/Feature_ext/Part2_features"
     )
 
     # ------------------------------------------------------
@@ -202,7 +201,7 @@ def create_feature_extraction_config():
     # ------------------------------------------------------
     config_output_dir = (
         "/home/tperezsanchez/Tomas_PS_DissertationKCL2026/"
-        "Main_project/src/pipelines/2_Feature_ext/configs/10OXG"
+        "Main_project/src/pipelines/2_Feature_ext/configs/1JSZ6"
     )
 
     # ------------------------------------------------------
