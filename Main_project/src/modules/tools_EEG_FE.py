@@ -944,12 +944,425 @@ def plot_mannwhitney_feature_violins_2_8(
     print(f"PDF saved to: {pdf_output_path}")
 
     return df_mannwhitney_results_violin
+def format_feature_label_for_plot(feature_name):
+    """
+    Convert internal feature names into readable plot labels.
 
+    Example
+    -------
+    alpha_power_EEG_SQ_P_SQ_C -> alpha power [EEG_SQ_P_SQ_C]
+    mean_EEG_SQ_P_SQ_C        -> mean amplitude [EEG_SQ_P_SQ_C]
+    peak_freq_EEG_SQ_P_SQ_C   -> peak frequency [EEG_SQ_P_SQ_C]
+    """
+
+    feature = str(feature_name)
+
+    feature_patterns = {
+        "peak_frequency_": "Peak frequency",
+        "peak_freq_": "Peak frequency",
+        "dominant_frequency_": "Dominant frequency",
+        "dominant_freq_": "Dominant frequency",
+
+        "delta_power_": "Delta power",
+        "theta_power_": "Theta power",
+        "alpha_power_": "Alpha power",
+        "beta_power_": "Beta power",
+        "gamma_power_": "Gamma power",
+
+        "line_length_": "Line length",
+        "linelength_": "Line length",
+        "line_len_": "Line length",
+
+        "peak_to_peak_": "Peak-to-peak amplitude",
+        "ptp_": "Peak-to-peak amplitude",
+
+        "root_mean_square_": "RMS",
+        "rms_": "RMS",
+
+        "std_": "Standard deviation",
+        "var_": "Variance",
+        "variance_": "Variance",
+
+        "skewness_": "Skewness",
+        "skew_": "Skewness",
+        "kurtosis_": "Kurtosis",
+        "kurt_": "Kurtosis",
+
+        "mean_": "Mean amplitude",
+    }
+
+    for prefix, readable_name in feature_patterns.items():
+        if feature.startswith(prefix):
+            channel_name = feature.replace(prefix, "", 1)
+            return f"{readable_name} [{channel_name}]"
+
+    # Fallback if no pattern is detected
+    return feature
+def get_feature_subcategory_palette():
+    """
+    Return a colorblind-friendly palette for EEG feature subcategories.
+    Uses Okabe-Ito inspired colors.
+    """
+
+    return {
+        "Amplitude level and magnitude": "#0072B2",  # blue
+        "Amplitude variability": "#E69F00",          # orange
+        "Temporal waveform change / signal complexity": "#009E73",  # green
+        "Amplitude distribution shape": "#CC79A7",   # purple
+        "Band-specific spectral power": "#D55E00",   # vermillion
+        "Dominant spectral frequency": "#56B4E9",    # sky blue
+        "Other / unclassified": "#999999"            # grey
+    }
+
+
+def assign_feature_subcategory(feature_name):
+    """
+    Assign an EEG feature to a predefined subcategory based on its name.
+    """
+
+    feature = str(feature_name).lower()
+
+    # -------------------------------
+    # Amplitude level and magnitude
+    # -------------------------------
+    if (
+        feature.startswith("mean_")
+        or "_mean_" in feature
+        or "rms" in feature
+        or "root_mean_square" in feature
+        or "peak_to_peak" in feature
+        or "ptp" in feature
+    ):
+        return "Amplitude level and magnitude"
+
+    # -------------------------------
+    # Amplitude variability
+    # -------------------------------
+    elif (
+        feature.startswith("std_")
+        or "_std_" in feature
+        or "standard_deviation" in feature
+        or feature.startswith("var_")
+        or "_var_" in feature
+        or "variance" in feature
+    ):
+        return "Amplitude variability"
+
+    # -------------------------------
+    # Temporal waveform change / signal complexity
+    # -------------------------------
+    elif (
+        "line_length" in feature
+        or "linelength" in feature
+        or "line_len" in feature
+    ):
+        return "Temporal waveform change / signal complexity"
+
+    # -------------------------------
+    # Amplitude distribution shape
+    # -------------------------------
+    elif (
+        "skewness" in feature
+        or "skew" in feature
+        or "kurtosis" in feature
+        or "kurt" in feature
+    ):
+        return "Amplitude distribution shape"
+
+    # -------------------------------
+    # Band-specific spectral power
+    # -------------------------------
+    elif (
+        "delta" in feature
+        or "theta" in feature
+        or "alpha" in feature
+        or "beta" in feature
+        or "gamma" in feature
+    ):
+        return "Band-specific spectral power"
+
+    # -------------------------------
+    # Dominant spectral frequency
+    # -------------------------------
+    elif (
+        "peak_frequency" in feature
+        or "peak_freq" in feature
+        or "dominant_frequency" in feature
+        or "dominant_freq" in feature
+    ):
+        return "Dominant spectral frequency"
+
+    else:
+        return "Other / unclassified"
+
+
+# Function #8 V2
+# with effect size and colour palette
+def plot_mannwhitney_feature_violins_2_8_V2(
+    feature_cols,
+    group_1_PREICTAL,
+    group_2_SEIZURE,
+    pdf_output_path,
+    alpha=0.05,
+    show_plots=False,
+    patient_id=None
+):
+    """
+    Generate violin plots for each feature comparing preictal vs ictal groups,
+    perform Mann-Whitney U tests, calculate rank-biserial effect size,
+    and save all plots into a multi-page PDF.
+
+    The returned dataframe includes additional columns for downstream
+    volcano plots and effect-size barplots:
+    - neg_log10_p
+    - effect_size_rank_biserial
+    - abs_effect_size_rank_biserial
+    - feature_subcategory
+    - feature_color
+
+    Positive rank-biserial values mean the feature tends to be higher
+    in ictal windows. Negative values mean the feature tends to be higher
+    in preictal windows.
+    """
+
+    # Colors for violin plots only
+    palette = {
+        "preictal": "skyblue",
+        "ictal": "salmon"
+    }
+
+    # Colorblind-friendly palette for downstream plots
+    subcategory_palette = get_feature_subcategory_palette()
+
+    # Store Mann-Whitney results
+    mannwhitney_results_violin = []
+
+    # Create output folder if needed
+    pdf_output_path = Path(pdf_output_path)
+    pdf_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Open PDF file
+    with PdfPages(pdf_output_path) as pdf:
+
+        # -------------------------------
+        # Loop through all feature columns
+        # -------------------------------
+        for feature in feature_cols:
+
+            print(f"Plotting feature: {feature}")
+
+            # -------------------------------
+            # Check if feature exists in both groups
+            # -------------------------------
+            if feature not in group_1_PREICTAL.columns:
+                print(f"Skipping {feature}: not found in preictal dataframe")
+                continue
+
+            if feature not in group_2_SEIZURE.columns:
+                print(f"Skipping {feature}: not found in ictal dataframe")
+                continue
+
+            # -------------------------------
+            # Extract values from both groups
+            # -------------------------------
+            preictal_values = group_1_PREICTAL[feature]
+            ictal_values = group_2_SEIZURE[feature]
+
+            # Convert to numeric and remove NaN / infinite values
+            preictal_values = pd.to_numeric(preictal_values, errors="coerce")
+            ictal_values = pd.to_numeric(ictal_values, errors="coerce")
+
+            preictal_values = (
+                preictal_values
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+            )
+
+            ictal_values = (
+                ictal_values
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+            )
+
+            # -------------------------------
+            # Skip feature if one group has no valid values
+            # -------------------------------
+            if len(preictal_values) == 0 or len(ictal_values) == 0:
+                print(f"Skipping {feature}: not enough valid values")
+                continue
+
+            # -------------------------------
+            # Create long-format dataframe for plotting
+            # -------------------------------
+            df_plot = pd.DataFrame({
+                "value": pd.concat([preictal_values, ictal_values], axis=0),
+                "label": (
+                    ["preictal"] * len(preictal_values) +
+                    ["ictal"] * len(ictal_values)
+                )
+            })
+
+            # -------------------------------
+            # Mann-Whitney U test
+            # -------------------------------
+            # stat is U for the first group passed: preictal
+            stat, p_value = mannwhitneyu(
+                preictal_values,
+                ictal_values,
+                alternative="two-sided"
+            )
+
+            if p_value < alpha:
+                test_result = "Significant difference"
+            else:
+                test_result = "No significant difference"
+
+            # -------------------------------
+            # Rank-biserial effect size
+            # -------------------------------
+            n_preictal = len(preictal_values)
+            n_ictal = len(ictal_values)
+
+            u_preictal = stat
+
+            # Convert U_preictal into U_ictal.
+            # This makes positive effect size mean ictal > preictal.
+            u_ictal = (n_preictal * n_ictal) - u_preictal
+
+            effect_size_rank_biserial = (
+                (2 * u_ictal) / (n_preictal * n_ictal)
+            ) - 1
+
+            abs_effect_size_rank_biserial = abs(effect_size_rank_biserial)
+
+            # -------------------------------
+            # -log10 p-value
+            # -------------------------------
+            neg_log10_p = -np.log10(
+                max(p_value, np.nextafter(0, 1))
+            )
+
+            # -------------------------------
+            # Descriptive statistics
+            # -------------------------------
+            median_preictal = np.median(preictal_values)
+            median_ictal = np.median(ictal_values)
+
+            mean_preictal = np.mean(preictal_values)
+            mean_ictal = np.mean(ictal_values)
+
+            median_difference_ictal_minus_preictal = (
+                median_ictal - median_preictal
+            )
+
+            mean_difference_ictal_minus_preictal = (
+                mean_ictal - mean_preictal
+            )
+
+            # -------------------------------
+            # Feature subcategory for downstream plots
+            # -------------------------------
+            feature_subcategory = assign_feature_subcategory(feature)
+
+            feature_color = subcategory_palette.get(
+                feature_subcategory,
+                subcategory_palette["Other / unclassified"]
+            )
+
+            # -------------------------------
+            # Save statistical result
+            # -------------------------------
+            mannwhitney_results_violin.append({
+                "patient_id": patient_id,
+                "feature": feature,
+                "n_preictal": n_preictal,
+                "n_ictal": n_ictal,
+                "mannwhitney_U_preictal": u_preictal,
+                "mannwhitney_U_ictal": u_ictal,
+                "p_value": p_value,
+                "neg_log10_p": neg_log10_p,
+                "effect_size_rank_biserial": effect_size_rank_biserial,
+                "abs_effect_size_rank_biserial": abs_effect_size_rank_biserial,
+                "median_preictal": median_preictal,
+                "median_ictal": median_ictal,
+                "mean_preictal": mean_preictal,
+                "mean_ictal": mean_ictal,
+                "median_difference_ictal_minus_preictal": median_difference_ictal_minus_preictal,
+                "mean_difference_ictal_minus_preictal": mean_difference_ictal_minus_preictal,
+                "feature_subcategory": feature_subcategory,
+                "feature_color": feature_color,
+                "result": test_result
+            })
+
+            # -------------------------------
+            # Violin plot
+            # -------------------------------
+            fig, ax = plt.subplots(figsize=(6, 5))
+
+            sns.violinplot(
+                data=df_plot,
+                x="label",
+                y="value",
+                hue="label",
+                palette=palette,
+                order=["preictal", "ictal"],
+                legend=False,
+                inner="box",
+                cut=0,
+                ax=ax
+            )
+
+            # -------------------------------
+            # Plot title with optional patient ID
+            # -------------------------------
+            if patient_id is not None:
+                title_prefix = f"Patient: {patient_id} | {feature}"
+            else:
+                title_prefix = feature
+            ax.set_title(
+                f"{title_prefix}\n"
+                f"Mann-Whitney U = {stat:.2f}, p = {p_value:.3e}\n"
+                f"Rank-biserial = {effect_size_rank_biserial:.3f}\n"
+                f"{test_result}"
+            )
+
+            ax.set_xlabel("Class label")
+            ax.set_ylabel(feature)
+
+            plt.tight_layout()
+
+            # Save current figure as one page in the PDF
+            pdf.savefig(fig, bbox_inches="tight")
+
+            if show_plots:
+                plt.show()
+
+            plt.close(fig)
+
+    # -------------------------------
+    # Convert statistical results to dataframe
+    # -------------------------------
+    df_mannwhitney_results_violin = pd.DataFrame(
+        mannwhitney_results_violin
+    )
+
+    # Sort by p-value
+    if not df_mannwhitney_results_violin.empty:
+        df_mannwhitney_results_violin = (
+            df_mannwhitney_results_violin
+            .sort_values("p_value")
+            .reset_index(drop=True)
+        )
+
+    print(f"PDF saved to: {pdf_output_path}")
+
+    return df_mannwhitney_results_violin
 #=================================================================================
 #=================================================================================
 #=================================================================================
 # 
 # Function #9
+
 def plot_top_mannwhitney_features_2_9(
     df_mannwhitney_results,
     top_n=20,
@@ -972,7 +1385,7 @@ def plot_top_mannwhitney_features_2_9(
     pdf_output_path : str or Path, optional
         If provided, the plot will be saved as a PDF.
 
-    show_plot : bool, default=True
+    show_plot : bool, default=False
         If True, display the plot.
 
     patient_id : str, optional
@@ -1006,7 +1419,134 @@ def plot_top_mannwhitney_features_2_9(
     # -------------------------------
     # Add -log10(p-value)
     # -------------------------------
-    df_ranked["minus_log10_p"] = -np.log10(df_ranked["p_value"])
+    df_ranked["minus_log10_p"] = -np.log10(
+        df_ranked["p_value"].clip(lower=np.nextafter(0, 1))
+    )
+
+    # -------------------------------
+    # Select top N features
+    # -------------------------------
+    df_top = df_ranked.head(top_n).copy()
+
+    # -------------------------------
+    # Plot
+    # -------------------------------
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    sns.barplot(
+        data=df_top,
+        x="minus_log10_p",
+        y="feature",
+        ax=ax
+    )
+
+    ax.set_xlabel("-log10(p-value)")
+    ax.set_ylabel("Feature")
+
+    # -------------------------------
+    # Plot title with optional patient ID
+    # -------------------------------
+    base_title = f"Top {top_n} features ranked by Mann-Whitney p-value"
+
+    if patient_id is not None:
+        full_title = f"{base_title} | Patient: {patient_id}"
+    else:
+        full_title = base_title
+
+    ax.set_title(full_title)
+
+    plt.tight_layout()
+
+    # -------------------------------
+    # Save plot as PDF if requested
+    # -------------------------------
+    if pdf_output_path is not None:
+        pdf_output_path = Path(pdf_output_path)
+        pdf_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        fig.savefig(pdf_output_path, format="pdf", bbox_inches="tight")
+        print(f"PDF saved to: {pdf_output_path}")
+
+    if show_plot:
+        plt.show()
+
+    plt.close(fig)
+
+    return df_top
+# Function #8 V3
+# with log2 median fold-change and colour palette
+
+def plot_mannwhitney_feature_violins_2_8_V3_log2fold(
+    feature_cols,
+    group_1_PREICTAL,
+    group_2_SEIZURE,
+    pdf_output_path,
+    alpha=0.05,
+    show_plots=False,
+    patient_id=None,
+    eps=1e-12
+):
+    """
+    Generate violin plots for each feature comparing preictal vs ictal groups,
+    perform Mann-Whitney U tests, calculate log2 median fold-change,
+    and save all plots into a multi-page PDF.
+
+    The returned dataframe includes additional columns for downstream
+    volcano plots and effect-size barplots:
+    - neg_log10_p
+    - effect_size_log2_median_fold_change
+    - abs_effect_size_log2_median_fold_change
+    - fold_change_median_ictal_over_preictal
+    - valid_log2_fold_change
+    - feature_subcategory
+    - feature_color
+
+    Positive log2 fold-change values mean the feature median is higher
+    in ictal windows. Negative values mean the feature median is higher
+    in preictal windows.
+
+    Note
+    ----
+    log2 fold-change is only computed when both group medians are positive.
+    If either median is zero or negative, the log2 fold-change is set to NaN.
+    """
+
+    # Colors for violin plots only
+    palette = {
+        "preictal": "skyblue",
+        "ictal": "salmon"
+    }
+
+    # Colorblind-friendly palette for downstream plots
+    subcategory_palette = get_feature_subcategory_palette()
+
+    # Store Mann-Whitney results
+    mannwhitney_results_violin = []
+
+    # Create output folder if needed
+    pdf_output_path = Path(pdf_output_path)
+    pdf_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Open PDF file
+    with PdfPages(pdf_output_path) as pdf:
+
+        # -------------------------------
+        # Loop through all feature columns
+        # -------------------------------
+        for feature in feature_cols:
+
+            print(f"Plotting feature: {feature}")
+
+            # -------------------------------
+            # Check if feature exists in both groups
+            # -------------------------------
+            if feature not in group_1_PREICTAL.columns:
+                print(f"Skipping {feature}: not found in preictal dataframe")
+                continue
+
+            if feature not in group_2_SEIZURE.columns:
+                print(f"Skipping {feature}: not found in ictal dataframe")
+
 
     # -------------------------------
     # Select top N features
