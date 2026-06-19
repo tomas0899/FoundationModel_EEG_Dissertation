@@ -174,7 +174,8 @@ X = X.select_dtypes(include=[np.number]).copy()
 print("\nX shape after keeping numeric columns only:")
 print(X.shape)
 
-
+print("\nColumns used as model input X:")
+print(X.columns.tolist())
 # ============================================================
 # 9. HANDLE INFINITE AND MISSING VALUES
 # ============================================================
@@ -212,7 +213,8 @@ print(constant_cols)
 print("\nX shape after removing constant columns:")
 print(X.shape)
 
-
+print("\nFinal columns used for training:")
+print(X.columns.tolist())
 # ============================================================
 # 11. CONVERT LABELS TO BINARY FORMAT
 # ============================================================
