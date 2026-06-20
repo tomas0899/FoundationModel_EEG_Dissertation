@@ -1473,6 +1473,7 @@ def plot_top_mannwhitney_features_2_9(
     plt.close(fig)
 
     return df_top
+
 # Function #8 V3
 # with log2 median fold-change and colour palette
 
@@ -1491,22 +1492,10 @@ def plot_mannwhitney_feature_violins_2_8_V3_log2fold(
     perform Mann-Whitney U tests, calculate log2 median fold-change,
     and save all plots into a multi-page PDF.
 
-    The returned dataframe includes additional columns for downstream
-    volcano plots and effect-size barplots:
-    - neg_log10_p
-    - effect_size_log2_median_fold_change
-    - abs_effect_size_log2_median_fold_change
-    - fold_change_median_ictal_over_preictal
-    - valid_log2_fold_change
-    - feature_subcategory
-    - feature_color
-
     Positive log2 fold-change values mean the feature median is higher
     in ictal windows. Negative values mean the feature median is higher
     in preictal windows.
 
-    Note
-    ----
     log2 fold-change is only computed when both group medians are positive.
     If either median is zero or negative, the log2 fold-change is set to NaN.
     """
@@ -1546,58 +1535,231 @@ def plot_mannwhitney_feature_violins_2_8_V3_log2fold(
 
             if feature not in group_2_SEIZURE.columns:
                 print(f"Skipping {feature}: not found in ictal dataframe")
+                continue
 
+            # -------------------------------
+            # Extract values from both groups
+            # -------------------------------
+            preictal_values = group_1_PREICTAL[feature]
+            ictal_values = group_2_SEIZURE[feature]
+
+            # Convert to numeric and remove NaN / infinite values
+            preictal_values = pd.to_numeric(preictal_values, errors="coerce")
+            ictal_values = pd.to_numeric(ictal_values, errors="coerce")
+
+            preictal_values = (
+                preictal_values
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+            )
+
+            ictal_values = (
+                ictal_values
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+            )
+
+            # -------------------------------
+            # Skip feature if one group has no valid values
+            # -------------------------------
+            if len(preictal_values) == 0 or len(ictal_values) == 0:
+                print(f"Skipping {feature}: not enough valid values")
+                continue
+
+            # -------------------------------
+            # Create long-format dataframe for plotting
+            # -------------------------------
+            df_plot = pd.DataFrame({
+                "value": pd.concat([preictal_values, ictal_values], axis=0),
+                "label": (
+                    ["preictal"] * len(preictal_values) +
+                    ["ictal"] * len(ictal_values)
+                )
+            })
+
+            # -------------------------------
+            # Mann-Whitney U test
+            # -------------------------------
+            stat, p_value = mannwhitneyu(
+                preictal_values,
+                ictal_values,
+                alternative="two-sided"
+            )
+
+            if p_value < alpha:
+                test_result = "Significant difference"
+            else:
+                test_result = "No significant difference"
+
+            # -------------------------------
+            # Sample sizes
+            # -------------------------------
+            n_preictal = len(preictal_values)
+            n_ictal = len(ictal_values)
+
+            # -------------------------------
+            # -log10 p-value
+            # -------------------------------
+            neg_log10_p = -np.log10(
+                max(p_value, np.nextafter(0, 1))
+            )
+
+            # -------------------------------
+            # Descriptive statistics
+            # -------------------------------
+            median_preictal = np.median(preictal_values)
+            median_ictal = np.median(ictal_values)
+
+            mean_preictal = np.mean(preictal_values)
+            mean_ictal = np.mean(ictal_values)
+
+            median_difference_ictal_minus_preictal = (
+                median_ictal - median_preictal
+            )
+
+            mean_difference_ictal_minus_preictal = (
+                mean_ictal - mean_preictal
+            )
+
+            # -------------------------------
+            # Log2 median fold-change validity check
+            # -------------------------------
+            if median_preictal > 0 and median_ictal > 0:
+
+                fold_change_median_ictal_over_preictal = (
+                    (median_ictal + eps) / (median_preictal + eps)
+                )
+
+                effect_size_log2_median_fold_change = np.log2(
+                    fold_change_median_ictal_over_preictal
+                )
+
+                abs_effect_size_log2_median_fold_change = abs(
+                    effect_size_log2_median_fold_change
+                )
+
+                valid_log2_fold_change = True
+
+            else:
+
+                fold_change_median_ictal_over_preictal = np.nan
+                effect_size_log2_median_fold_change = np.nan
+                abs_effect_size_log2_median_fold_change = np.nan
+                valid_log2_fold_change = False
+
+            # -------------------------------
+            # Feature subcategory for downstream plots
+            # -------------------------------
+            feature_subcategory = assign_feature_subcategory(feature)
+
+            feature_color = subcategory_palette.get(
+                feature_subcategory,
+                subcategory_palette["Other / unclassified"]
+            )
+
+            # -------------------------------
+            # Save statistical result
+            # -------------------------------
+            mannwhitney_results_violin.append({
+                "patient_id": patient_id,
+                "feature": feature,
+                "n_preictal": n_preictal,
+                "n_ictal": n_ictal,
+
+                "mannwhitney_U_preictal": stat,
+                "p_value": p_value,
+                "neg_log10_p": neg_log10_p,
+
+                "effect_size_log2_median_fold_change": effect_size_log2_median_fold_change,
+                "abs_effect_size_log2_median_fold_change": abs_effect_size_log2_median_fold_change,
+                "fold_change_median_ictal_over_preictal": fold_change_median_ictal_over_preictal,
+                "valid_log2_fold_change": valid_log2_fold_change,
+
+                "median_preictal": median_preictal,
+                "median_ictal": median_ictal,
+                "mean_preictal": mean_preictal,
+                "mean_ictal": mean_ictal,
+                "median_difference_ictal_minus_preictal": median_difference_ictal_minus_preictal,
+                "mean_difference_ictal_minus_preictal": mean_difference_ictal_minus_preictal,
+
+                "feature_subcategory": feature_subcategory,
+                "feature_color": feature_color,
+                "result": test_result
+            })
+
+            # -------------------------------
+            # Violin plot
+            # -------------------------------
+            fig, ax = plt.subplots(figsize=(6, 5))
+
+            sns.violinplot(
+                data=df_plot,
+                x="label",
+                y="value",
+                hue="label",
+                palette=palette,
+                order=["preictal", "ictal"],
+                legend=False,
+                inner="box",
+                cut=0,
+                ax=ax
+            )
+
+            # -------------------------------
+            # Plot title with optional patient ID
+            # -------------------------------
+            if patient_id is not None:
+                title_prefix = f"Patient: {patient_id} | {feature}"
+            else:
+                title_prefix = feature
+
+            if valid_log2_fold_change:
+                log2fc_text = (
+                    f"log2 median FC = "
+                    f"{effect_size_log2_median_fold_change:.3f}"
+                )
+            else:
+                log2fc_text = "log2 median FC = NaN - non-positive median"
+
+            ax.set_title(
+                f"{title_prefix}\n"
+                f"Mann-Whitney U = {stat:.2f}, p = {p_value:.3e}\n"
+                f"{log2fc_text}\n"
+                f"{test_result}"
+            )
+
+            ax.set_xlabel("Class label")
+            ax.set_ylabel(feature)
+
+            plt.tight_layout()
+
+            # Save current figure as one page in the PDF
+            pdf.savefig(fig, bbox_inches="tight")
+
+            if show_plots:
+                plt.show()
+
+            plt.close(fig)
 
     # -------------------------------
-    # Select top N features
+    # Convert statistical results to dataframe
     # -------------------------------
-    df_top = df_ranked.head(top_n)
-
-    # -------------------------------
-    # Plot
-    # -------------------------------
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-    sns.barplot(
-        data=df_top,
-        x="minus_log10_p",
-        y="feature",
-        ax=ax
+    df_mannwhitney_results_violin = pd.DataFrame(
+        mannwhitney_results_violin
     )
 
-    ax.set_xlabel("-log10(p-value)")
-    ax.set_ylabel("Feature")
+    # Sort by p-value
+    if not df_mannwhitney_results_violin.empty:
+        df_mannwhitney_results_violin = (
+            df_mannwhitney_results_violin
+            .sort_values("p_value")
+            .reset_index(drop=True)
+        )
 
-    # -------------------------------
-    # Plot title with optional patient ID
-    # -------------------------------
-    base_title = f"Top {top_n} features ranked by Mann-Whitney p-value"
+    print(f"PDF saved to: {pdf_output_path}")
 
-    if patient_id is not None:
-        full_title = f"{base_title} | Patient: {patient_id}"
-    else:
-        full_title = base_title
+    return df_mannwhitney_results_violin
 
-    ax.set_title(full_title)
-
-    plt.tight_layout()
-
-    # -------------------------------
-    # Save plot as PDF if requested
-    # -------------------------------
-    if pdf_output_path is not None:
-        pdf_output_path = Path(pdf_output_path)
-        pdf_output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        fig.savefig(pdf_output_path, format="pdf", bbox_inches="tight")
-        print(f"PDF saved to: {pdf_output_path}")
-
-    if show_plot:
-        plt.show()
-
-    plt.close(fig)
-
-    return df_top
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -1776,3 +1938,270 @@ def plot_top_features_by_channel_2_10(
     plt.close(fig)
 
     return df_top, df_ranked
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #11
+
+def plot_volcano_log2fc_2_11(
+    df_mannwhitney_results_log2fc,
+    alpha=0.05,
+    patient_id=None,
+    figsize=(14, 12),
+    show_plot=True,
+    save_path=None
+):
+    """
+    Generate a volcano plot using log2 median fold-change and -log10(p-value).
+
+    Parameters
+    ----------
+    df_mannwhitney_results_log2fc : pd.DataFrame
+        Dataframe containing Mann-Whitney results with log2 fold-change.
+        Required columns:
+        - valid_log2_fold_change
+        - effect_size_log2_median_fold_change
+        - neg_log10_p
+        - feature_subcategory
+
+    alpha : float, default=0.05
+        Significance threshold used to draw the horizontal line.
+
+    patient_id : str or None, default=None
+        Patient ID used in the plot title.
+
+    figsize : tuple, default=(14, 12)
+        Figure size.
+
+    show_plot : bool, default=True
+        Whether to display the plot.
+
+    save_path : str or Path or None, default=None
+        Optional path to save the figure.
+
+    Returns
+    -------
+    df_plot : pd.DataFrame
+        Filtered dataframe used for the volcano plot.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from pathlib import Path
+
+    required_cols = [
+        "valid_log2_fold_change",
+        "effect_size_log2_median_fold_change",
+        "neg_log10_p",
+        "feature_subcategory"
+    ]
+
+    missing_cols = [
+        col for col in required_cols
+        if col not in df_mannwhitney_results_log2fc.columns
+    ]
+
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
+
+    df_plot = df_mannwhitney_results_log2fc[
+        df_mannwhitney_results_log2fc["valid_log2_fold_change"] == True
+    ].copy()
+
+    df_plot = df_plot.replace([np.inf, -np.inf], np.nan)
+    df_plot = df_plot.dropna(
+        subset=[
+            "effect_size_log2_median_fold_change",
+            "neg_log10_p",
+            "feature_subcategory"
+        ]
+    )
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    sns.scatterplot(
+        data=df_plot,
+        x="effect_size_log2_median_fold_change",
+        y="neg_log10_p",
+        hue="feature_subcategory",
+        palette=get_feature_subcategory_palette(),
+        s=70,
+        edgecolor="black",
+        linewidth=0.4,
+        ax=ax
+    )
+
+    ax.axvline(0, linestyle="--", color="black")
+    # Effect size thresholds
+    ax.axvline(-1, linestyle="--", color="grey")
+    ax.axvline(1, linestyle="--", color="grey")
+
+    ax.axhline(-np.log10(alpha), linestyle="--", color="grey")
+    
+
+    ax.set_xlabel("log2 median fold-change")
+    ax.set_ylabel("-log10(p-value)")
+
+    if patient_id is not None:
+        ax.set_title(f"Volcano plot using log2FC | Patient {patient_id}")
+    else:
+        ax.set_title("Volcano plot using log2FC")
+
+    ax.legend(
+        title="Feature subcategory",
+        bbox_to_anchor=(1.05, 1),
+        loc="upper left"
+    )
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight", dpi=300)
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+    return df_plot
+#=================================================================================
+#=================================================================================
+#=================================================================================
+# 
+# Function #12
+
+def plot_top_log2fc_features_barplot_2_12(
+    df_mannwhitney_results_log2fc,
+    top_n=20,
+    patient_id=None,
+    figsize_width=18,
+    height_per_feature=0.45,
+    show_plot=True,
+    save_path=None
+):
+    """
+    Plot the top N features ordered by -log10(p-value), showing their
+    log2 median fold-change as a horizontal barplot.
+
+    Parameters
+    ----------
+    df_mannwhitney_results_log2fc : pd.DataFrame
+        Dataframe containing Mann-Whitney results with log2 fold-change.
+        Required columns:
+        - valid_log2_fold_change
+        - neg_log10_p
+        - feature
+        - effect_size_log2_median_fold_change
+        - feature_subcategory
+
+    top_n : int, default=20
+        Number of top features to plot.
+
+    patient_id : str or None, default=None
+        Patient ID used in the plot title.
+
+    figsize_width : float, default=18
+        Width of the figure.
+
+    height_per_feature : float, default=0.45
+        Height multiplier per feature.
+
+    show_plot : bool, default=True
+        Whether to display the plot.
+
+    save_path : str or Path or None, default=None
+        Optional path to save the figure.
+
+    Returns
+    -------
+    df_bar : pd.DataFrame
+        Filtered dataframe used for the barplot.
+    """
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from pathlib import Path
+
+    required_cols = [
+        "valid_log2_fold_change",
+        "neg_log10_p",
+        "feature",
+        "effect_size_log2_median_fold_change",
+        "feature_subcategory"
+    ]
+
+    missing_cols = [
+        col for col in required_cols
+        if col not in df_mannwhitney_results_log2fc.columns
+    ]
+
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
+
+    df_bar = (
+        df_mannwhitney_results_log2fc
+        .query("valid_log2_fold_change == True")
+        .sort_values("neg_log10_p", ascending=False)
+        .head(top_n)
+        .copy()
+    )
+
+    df_bar["feature_display"] = (
+        df_bar["feature"]
+        .apply(format_feature_label_for_plot)
+    )
+
+    feature_order = df_bar["feature_display"].tolist()
+
+    fig_height = height_per_feature * len(df_bar) + 2
+
+    fig, ax = plt.subplots(figsize=(figsize_width, fig_height))
+
+    sns.barplot(
+        data=df_bar,
+        y="feature_display",
+        x="effect_size_log2_median_fold_change",
+        hue="feature_subcategory",
+        palette=get_feature_subcategory_palette(),
+        order=feature_order,
+        dodge=False,
+        ax=ax
+    )
+
+    ax.axvline(0, linestyle="--", color="black")
+
+    ax.set_xlabel("log2 median fold-change")
+    ax.set_ylabel("Feature")
+
+    if patient_id is not None:
+        ax.set_title(
+            f"Top {top_n} features ordered by -log10(p-value) | Patient {patient_id}"
+        )
+    else:
+        ax.set_title(
+            f"Top {top_n} features ordered by -log10(p-value)"
+        )
+
+    ax.legend(
+        title="Feature subcategory",
+        bbox_to_anchor=(1.05, 1),
+        loc="upper left"
+    )
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, bbox_inches="tight", dpi=300)
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+    return df_bar

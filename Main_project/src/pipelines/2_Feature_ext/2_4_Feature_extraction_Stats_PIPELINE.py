@@ -197,7 +197,7 @@ if len(feature_cols) == 0:
 # 4. Violin plots + Mann-Whitney test
 # ===============================
 
-df_mannwhitney_results_violin = TEEG_FE.plot_mannwhitney_feature_violins_2_8(
+df_mannwhitney_results_violin = TEEG_FE.plot_mannwhitney_feature_violins_2_8_V3_log2fold(
     feature_cols=feature_cols,
     group_1_PREICTAL=group_1_PREICTAL,
     group_2_SEIZURE=group_2_SEIZURE,
@@ -267,9 +267,20 @@ if ranked_features_csv_path is not None:
     print("\nRanked features by channel saved to:")
     print(ranked_features_csv_path)
 
+# ===============================
+# 7. Volcano and barplot
+# ===============================
+df_volcano_plot = TEEG_FE.plot_volcano_log2fc(
+    df_mannwhitney_results_log2fc=df_mannwhitney_results_log2fc,
+    alpha=alpha,
+    patient_id="XB47Y",
+    show_plot=True,
+    save_path="Tomas_PS_DissertationKCL2026/Main_project/results/XB47Y/volcano_log2fc.png"
+)
+
 
 # ===============================
-# 7. Final summary
+# 8. Final summary
 # ===============================
 
 print("\nFeature statistics pipeline completed successfully.")
