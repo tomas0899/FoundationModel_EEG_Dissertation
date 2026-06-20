@@ -74,6 +74,11 @@ mannwhitney_csv_path = Path(config["outputs"]["mannwhitney_csv_path"])
 top20_csv_path = Path(config["outputs"]["top20_csv_path"])
 top20_by_channel_csv_path = Path(config["outputs"]["top20_by_channel_csv_path"])
 
+joint_results_pkl_path = config["outputs"].get("joint_results_pkl_path", None)
+
+if joint_results_pkl_path is not None:
+    joint_results_pkl_path = Path(joint_results_pkl_path)
+    
 # Optional output, depending on whether it exists in the config
 ranked_features_csv_path = config["outputs"].get("ranked_features_csv_path", None)
 
@@ -117,7 +122,8 @@ for output_path in [
     top20_by_channel_csv_path,
 ]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
+if joint_results_pkl_path is not None:
+    joint_results_pkl_path.parent.mkdir(parents=True, exist_ok=True)
 if ranked_features_csv_path is not None:
     ranked_features_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -195,7 +201,6 @@ if len(feature_cols) == 0:
         "No feature columns found after excluding metadata columns."
     )
 
-
 # ===============================
 # 4. Violin plots + Mann-Whitney test
 # ===============================
@@ -210,6 +215,15 @@ df_mannwhitney_results_log2fc = TEEG_FE.plot_mannwhitney_feature_violins_2_8_V3_
     patient_id=patient_id
 )
 
+# Metadata for downstream joint analysis
+df_mannwhitney_results_log2fc["patient_id"] = patient_id
+df_mannwhitney_results_log2fc["experiment_id"] = config["config_metadata"]["experiment_id"]
+df_mannwhitney_results_log2fc["version"] = config["config_metadata"]["version"]
+df_mannwhitney_results_log2fc["date_generated"] = config["config_metadata"]["date_generated"]
+df_mannwhitney_results_log2fc["alpha"] = alpha
+df_mannwhitney_results_log2fc["n_preictal_windows"] = len(group_1_PREICTAL)
+df_mannwhitney_results_log2fc["n_seizure_windows"] = len(group_2_SEIZURE)
+
 df_mannwhitney_results_log2fc.to_csv(
     mannwhitney_csv_path,
     index=False
@@ -218,7 +232,11 @@ df_mannwhitney_results_log2fc.to_csv(
 print("\nMann-Whitney results saved to:")
 print(mannwhitney_csv_path)
 
+if joint_results_pkl_path is not None:
+    df_mannwhitney_results_log2fc.to_pickle(joint_results_pkl_path)
 
+    print("\nJoint Mann-Whitney/log2FC/effect-size PKL saved to:")
+    print(joint_results_pkl_path)
 # ===============================
 # 5. Top N Mann-Whitney barplot
 # ===============================
@@ -271,23 +289,24 @@ if ranked_features_csv_path is not None:
     print(ranked_features_csv_path)
 
 # ===============================
-# 7. Volcano and barplot
+# 7. Volcano and log2 fold-change barplot
 # ===============================
+
 df_volcano_plot = TEEG_FE.plot_volcano_log2fc_2_11(
     df_mannwhitney_results_log2fc=df_mannwhitney_results_log2fc,
     alpha=alpha,
-    patient_id="XB47Y",
-    show_plot=True,
-    save_path="Tomas_PS_DissertationKCL2026/Main_project/results/XB47Y/volcano_log2fc.png"
-)
-df_top_log2fc_barplot = TEEG_FE.plot_top_log2fc_features_barplot_2_12(
-    df_mannwhitney_results_log2fc=df_mannwhitney_results_log2fc,
-    top_n=20,
-    patient_id="XB47Y",
-    show_plot=True,
-    save_path="Tomas_PS_DissertationKCL2026/Main_project/results/XB47Y/top_log2fc_features_barplot.png"
+    patient_id=patient_id,
+    show_plot=show_plots,
+    save_path=volcano_png_path
 )
 
+df_top_log2fc_barplot = TEEG_FE.plot_top_log2fc_features_barplot_2_12(
+    df_mannwhitney_results_log2fc=df_mannwhitney_results_log2fc,
+    top_n=top_n,
+    patient_id=patient_id,
+    show_plot=show_plots,
+    save_path=top_log2fc_barplot_png_path
+)
 # ===============================
 # 8. Final summary
 # ===============================
@@ -301,6 +320,7 @@ print("Top features by channel PDF:", top20_by_channel_pdf_path)
 print("Mann-Whitney CSV:", mannwhitney_csv_path)
 print("Top features CSV:", top20_csv_path)
 print("Top features by channel CSV:", top20_by_channel_csv_path)
-
+print("Volcano plot PNG:", volcano_png_path)
+print("Top log2FC barplot PNG:", top_log2fc_barplot_png_path)
 if ranked_features_csv_path is not None:
     print("Ranked features CSV:", ranked_features_csv_path)

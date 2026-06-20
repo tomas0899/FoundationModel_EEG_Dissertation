@@ -41,7 +41,12 @@ output_dir = (
     / "Feature_ext"
     / "Part3_Feat_stats"
 )
-
+joint_output_dir = (
+    project_root
+    / "results"
+    / "together_results"
+    / "pvalue_effectsize"
+)
 config_output_dir = (
     project_root
     / "src"
@@ -106,8 +111,8 @@ def clean_for_filename(text):
 experiment_id_clean = clean_for_filename(experiment_id)
 
 output_dir.mkdir(parents=True, exist_ok=True)
+joint_output_dir.mkdir(parents=True, exist_ok=True)
 config_output_dir.mkdir(parents=True, exist_ok=True)
-
 
 # ============================================================
 # 3. AUTO-GENERATED OUTPUT FILENAMES
@@ -156,7 +161,23 @@ ranked_features_csv_path = output_dir / (
     f"{experiment_id_clean}_"
     f"{date_str}_{version}.csv"
 )
+volcano_png_path = output_dir / (
+    f"{patient_id}_VOLCANO-LOG2FC_"
+    f"{experiment_id_clean}_"
+    f"{date_str}_{version}.png"
+)
 
+top_log2fc_barplot_png_path = output_dir / (
+    f"{patient_id}_TOP20-LOG2FC-BARPLOT_"
+    f"{experiment_id_clean}_"
+    f"{date_str}_{version}.png"
+)
+
+joint_results_pkl_path = joint_output_dir / (
+    f"{patient_id}_MANNWHITNEY-LOG2FC-EFFECTSIZE_"
+    f"{experiment_id_clean}_"
+    f"{date_str}_{version}.pkl"
+)
 
 # ============================================================
 # 4. BUILD CONFIG DICTIONARY
@@ -178,15 +199,20 @@ config = {
 
     "outputs": {
         "output_dir": str(output_dir),
-
+    
         "violin_pdf_path": str(violin_pdf_path),
         "top20_pdf_path": str(top20_pdf_path),
         "top20_by_channel_pdf_path": str(top20_by_channel_pdf_path),
-
+    
+        "volcano_png_path": str(volcano_png_path),
+        "top_log2fc_barplot_png_path": str(top_log2fc_barplot_png_path),
+    
         "mannwhitney_csv_path": str(mannwhitney_csv_path),
         "top20_csv_path": str(top20_csv_path),
         "top20_by_channel_csv_path": str(top20_by_channel_csv_path),
-        "ranked_features_csv_path": str(ranked_features_csv_path)
+        "ranked_features_csv_path": str(ranked_features_csv_path),
+    
+        "joint_results_pkl_path": str(joint_results_pkl_path)
     },
 
     "label_settings": {
