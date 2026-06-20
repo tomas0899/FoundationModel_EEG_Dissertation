@@ -14,14 +14,14 @@ from datetime import datetime
 # ============================================================
 
 
-patient_id = "1JSZ6"
+patient_id = "FP628"
 
 project_root = Path("/home/tperezsanchez/Tomas_PS_DissertationKCL2026/Main_project")
 
 experiment_id = (
     f"{patient_id}_IN-normalized_npz_FP-fullnpz_W10s_"
     "PRE6to5min_ICT0to1min_GAPasINT_FINAL-PREvsSEIZ_"
-    "20260612_v01_FEAT-TIME-FREQ_20260615_v01"
+    "20260612_v01_FEAT-TIME-FREQ_20260612_v01"
 )
 
 input_pkl_path = (
@@ -161,16 +161,16 @@ ranked_features_csv_path = output_dir / (
     f"{experiment_id_clean}_"
     f"{date_str}_{version}.csv"
 )
-volcano_png_path = output_dir / (
+volcano_svg_path = output_dir / (
     f"{patient_id}_VOLCANO-LOG2FC_"
     f"{experiment_id_clean}_"
-    f"{date_str}_{version}.png"
+    f"{date_str}_{version}.svg"
 )
 
-top_log2fc_barplot_png_path = output_dir / (
+top_log2fc_barplot_svg_path = output_dir / (
     f"{patient_id}_TOP20-LOG2FC-BARPLOT_"
     f"{experiment_id_clean}_"
-    f"{date_str}_{version}.png"
+    f"{date_str}_{version}.svg"
 )
 
 joint_results_pkl_path = joint_output_dir / (
@@ -204,8 +204,8 @@ config = {
         "top20_pdf_path": str(top20_pdf_path),
         "top20_by_channel_pdf_path": str(top20_by_channel_pdf_path),
     
-        "volcano_png_path": str(volcano_png_path),
-        "top_log2fc_barplot_png_path": str(top_log2fc_barplot_png_path),
+        "volcano_svg_path": str(volcano_svg_path),
+        "top_log2fc_barplot_svg_path": str(top_log2fc_barplot_svg_path),
     
         "mannwhitney_csv_path": str(mannwhitney_csv_path),
         "top20_csv_path": str(top20_csv_path),

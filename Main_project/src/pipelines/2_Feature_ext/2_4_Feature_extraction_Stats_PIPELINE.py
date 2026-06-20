@@ -68,8 +68,10 @@ output_dir = Path(config["outputs"]["output_dir"])
 violin_pdf_path = Path(config["outputs"]["violin_pdf_path"])
 top20_pdf_path = Path(config["outputs"]["top20_pdf_path"])
 top20_by_channel_pdf_path = Path(config["outputs"]["top20_by_channel_pdf_path"])
-volcano_png_path = Path(config["outputs"]["volcano_png_path"])
-top_log2fc_barplot_png_path = Path(config["outputs"]["top_log2fc_barplot_png_path"])
+
+volcano_svg_path = Path(config["outputs"]["volcano_svg_path"])
+top_log2fc_barplot_svg_path = Path(config["outputs"]["top_log2fc_barplot_svg_path"])
+
 mannwhitney_csv_path = Path(config["outputs"]["mannwhitney_csv_path"])
 top20_csv_path = Path(config["outputs"]["top20_csv_path"])
 top20_by_channel_csv_path = Path(config["outputs"]["top20_by_channel_csv_path"])
@@ -115,8 +117,8 @@ for output_path in [
     violin_pdf_path,
     top20_pdf_path,
     top20_by_channel_pdf_path,
-    volcano_png_path,
-    top_log2fc_barplot_png_path,
+    volcano_svg_path,
+    top_log2fc_barplot_svg_path,
     mannwhitney_csv_path,
     top20_csv_path,
     top20_by_channel_csv_path,
@@ -242,7 +244,7 @@ if joint_results_pkl_path is not None:
 # ===============================
 
 df_top_mannwhitney_features = TEEG_FE.plot_top_mannwhitney_features_2_9(
-    df_mannwhitney_results=df_mannwhitney_results_log2fc
+    df_mannwhitney_results=df_mannwhitney_results_log2fc,
     top_n=top_n,
     pdf_output_path=top20_pdf_path,
     show_plot=show_plots,
@@ -297,7 +299,7 @@ df_volcano_plot = TEEG_FE.plot_volcano_log2fc_2_11(
     alpha=alpha,
     patient_id=patient_id,
     show_plot=show_plots,
-    save_path=volcano_png_path
+    save_path=volcano_svg_path
 )
 
 df_top_log2fc_barplot = TEEG_FE.plot_top_log2fc_features_barplot_2_12(
@@ -305,7 +307,7 @@ df_top_log2fc_barplot = TEEG_FE.plot_top_log2fc_features_barplot_2_12(
     top_n=top_n,
     patient_id=patient_id,
     show_plot=show_plots,
-    save_path=top_log2fc_barplot_png_path
+    save_path=top_log2fc_barplot_svg_path
 )
 # ===============================
 # 8. Final summary
@@ -320,7 +322,7 @@ print("Top features by channel PDF:", top20_by_channel_pdf_path)
 print("Mann-Whitney CSV:", mannwhitney_csv_path)
 print("Top features CSV:", top20_csv_path)
 print("Top features by channel CSV:", top20_by_channel_csv_path)
-print("Volcano plot PNG:", volcano_png_path)
-print("Top log2FC barplot PNG:", top_log2fc_barplot_png_path)
+print("Volcano plot PNG:", volcano_svg_path)
+print("Top log2FC barplot PNG:", top_log2fc_barplot_svg_path)
 if ranked_features_csv_path is not None:
     print("Ranked features CSV:", ranked_features_csv_path)
