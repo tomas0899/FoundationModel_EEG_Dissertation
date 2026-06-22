@@ -104,7 +104,7 @@ def build_experiment_id(
 # PATIENT INFORMATION
 # ----------------------------------------------------------
 # The user only needs to change this value.
-patient_id = "10OXG"
+patient_id = "RQXZ1"
 
 # ----------------------------------------------------------
 # PROJECT ROOTS
@@ -129,7 +129,7 @@ output_root_dir = results_root / patient_id / "Pre_processing"
 # ----------------------------------------------------------
 # CONFIG OUTPUT DIRECTORY
 # ----------------------------------------------------------
-config_output_dir = project_root / "src" / "pipelines" / "1_Pre_process" / "configs" / "10OXG"
+config_output_dir = project_root / "src" / "pipelines" / "1_Pre_process" / "configs" / "RQXZ1"
 
 
 # ==========================================================
