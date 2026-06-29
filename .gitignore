@@ -30,3 +30,6 @@ Main_project/code/plots_html/
 
 Main_project/code/plots_html/
 .ipynb_checkpoints/
+
+# Generated figures
+*.svg
