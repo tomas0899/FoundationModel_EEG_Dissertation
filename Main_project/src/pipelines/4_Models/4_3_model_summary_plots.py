@@ -6,6 +6,167 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+import pandas as pd
+from pathlib import Path
+
+current_file = Path(__file__).resolve()
+
+project_root = None
+
+for parent in current_file.parents:
+    if (parent / "src").exists():
+        project_root = parent
+        break
+
+if project_root is None:
+    raise RuntimeError(
+        "Project root not found. Could not find a parent folder containing 'src'."
+    )
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from src.modules import tools_EEG_models as TEEG_mod
+# ============================================================
+# Model order
+# ============================================================
+
+model_order = [
+    "FEATURES + SVM",
+    "PCA + SVM",
+    "PCA + Decision Tree",
+    "PCA + Random Forest",
+]
+
+
+# ============================================================
+# Patient ID mapping
+# ============================================================
+
+patient_number_map = {
+    "10OXG": "P1",
+    "1JSZ6": "P2",
+    "3ZL8B": "P3",
+    "F88R2": "P4",
+    "FP628": "P5",
+    "JYXFE": "P6",
+    "PN12G": "P7",
+    "RQXZ1": "P8",
+    "XB47Y": "P9"
+}
+
+patient_order = [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "P9"
+]
+
+
+# ============================================================
+# Patient color palette
+# ============================================================
+
+CB_color_cycle = [
+    "#2E0F4F",  # P1 - very dark violet
+    "#FF5F00",  # P2 - very bright orange
+    "#1B7837",  # P3 - dark green
+    "#f781bf",  # P4 - pink
+    "#a65628",  # P5 - brown
+    "#984ea3",  # P6 - purple
+    "#999999",  # P7 - grey
+    "#e41a1c",  # P8 - red
+    "#dede00"   # P9 - yellow
+]
+
+patient_colors = {
+    patient: CB_color_cycle[i]
+    for i, patient in enumerate(patient_order)
+}
+
+
+# ============================================================
+# Helper function for clean filenames
+# ============================================================
+
+def clean_filename(text):
+    text = str(text).lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    text = text.strip("_")
+    return text
+
+
+# ============================================================
+# 1. Function to extract one metric from one classification CSV
+# ============================================================
+
+def extract_classification_metric(
+    csv_path,
+    metric_row="weighted avg",
+    metric_col="f1-score"
+):
+    """
+    Extracts one value from a classification table CSV.
+
+    Example:
+    metric_row = "weighted avg"
+    metric_col = "f1-score"
+    """
+
+    csv_path = Path(csv_path)
+
+    df = pd.read_csv(csv_path)
+
+    # Remove accidental unnamed index columns if present
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+
+    # Safety check
+    if "class_or_metric" not in df.columns:
+        raise ValueError(
+            f"'class_or_metric' column not found in {csv_path.name}. "
+            f"Columns found: {list(df.columns)}"
+        )
+
+    if metric_col not in df.columns:
+        raise ValueError(
+            f"'{metric_col}' column not found in {csv_path.name}. "
+            f"Columns found: {list(df.columns)}"
+        )
+
+    # Normalize labels to avoid problems with spaces/capitalization
+    df["class_or_metric_clean"] = (
+        df["class_or_metric"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    if isinstance(metric_row, str):
+        metric_row = [metric_row]
+    
+    metric_rows_clean = [
+        str(value).strip().lower()
+        for value in metric_row
+    ]
+    
+    matched_row = df[
+        df["class_or_metric_clean"].isin(metric_rows_clean)
+    ]
+
+    if matched_row.empty:
+        return np.nan
+    
+    return float(matched_row[metric_col].iloc[0])
+
+    value = metric_match[metric_col].iloc[0]
+
+    return float(value)
 def build_multi_metric_summary_df(metadata_df):
     """
     Builds a long-format summary dataframe with:
@@ -26,8 +187,8 @@ def build_multi_metric_summary_df(metadata_df):
             "metric_col": "f1-score"
         },
         {
-            "metric_name": "Seizure F1",
-            "metric_row": "seizure",
+            "metric_name": "Ictal F1",
+            "metric_row": ["ictal", "seizure"],
             "metric_col": "f1-score"
         },
     ]

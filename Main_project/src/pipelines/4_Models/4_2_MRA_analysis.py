@@ -19,14 +19,14 @@ output_dir = Path(
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
-df_characteristics = pd.read_csv(input_dir / "dataset_characteristics.csv")
-df_performance = pd.read_csv(input_dir / "model_performance.csv")
 
-df_merged = pd.merge(
-    df_characteristics,
-    df_performance,
-    on="Patient ID",
-    how="inner"
+df_merged = pd.read_csv(
+    input_dir / "MRA_merged_results.csv"
+)
+
+# Convert percentage of significant features into a proportion
+df_merged["prop_significant_features"] = (
+    df_merged["Significant features (%)"] / 100
 )
 
 df_merged
