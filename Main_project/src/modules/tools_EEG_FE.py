@@ -15,6 +15,7 @@ import glob
 from scipy.signal import iirnotch, tf2sos
 from scipy.signal import butter, sosfiltfilt, iirnotch, tf2sos
 from pathlib import Path
+from datetime import datetime, timezone
 
 # FEATURE EXTRACTION
 # Function #1
@@ -278,8 +279,8 @@ def compute_window_times(row, recording_start):
     end_sample = 4140
     fs = 207
     
-    start_sec = 10 segundos
-    end_sec   = 20 segundos
+    start_sec = 10 sec
+    end_sec   = 20 sec
     if recording started:
     2026-04-27 12:00:00
     then:
@@ -327,7 +328,7 @@ def get_matching_recording(row, df_recordings):
 def get_window_datetime_info(row, df_recordings):
     """
     Get the real start and end datetime of one EEG window.
-        row de df_windows
+        row from df_windows
             ↓
     search for metadata in df_recordings
             ↓

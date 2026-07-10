@@ -1,22 +1,28 @@
 # Change - Tears for fears 
-import os
 import glob
-from pathlib import Path
+import os
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional, Tuple
-
-import numpy as np
-import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import scipy.io as sio
-from scipy.io import loadmat
-from scipy.stats import skew, kurtosis
-from scipy.signal import welch, iirnotch, tf2sos, butter, sosfiltfilt
+
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.io import loadmat
+from scipy.signal import (
+    butter,
+    iirnotch,
+    sosfiltfilt,
+    tf2sos,
+    welch,
+)
 #=================================================================================
 #=================================================================================
 #=================================================================================
@@ -382,7 +388,7 @@ def plot_eeg_availability_with_onsetsV2_1_4(
     Plots daily EEG recording availability, overlays seizure onsets,
     shows total daily hours and lists matched onset times in the plot.
     """
-    # 0) Preparación de datos
+    
     df_files = df_files.copy()
     df_onsets = df_onsets.copy()
     
@@ -390,11 +396,11 @@ def plot_eeg_availability_with_onsetsV2_1_4(
     df_files["TF"] = pd.to_datetime(df_files["TF"])
     df_onsets["onset"] = pd.to_datetime(df_onsets["onset"])
 
-    # --- LÓGICA DE MATCHING ---
+    
     df_files = df_files.sort_values("T0")
     df_onsets = df_onsets.sort_values("onset")
 
-    # Unimos para saber qué onset cae en qué archivo
+    
     matched_df = pd.merge_asof(
         df_onsets, 
         df_files, 
@@ -403,13 +409,13 @@ def plot_eeg_availability_with_onsetsV2_1_4(
         direction="backward"
     )
 
-    # El onset debe estar dentro del rango [T0, TF] del archivo
+ 
     matched_df["captured"] = (matched_df["onset"] >= matched_df["T0"]) & \
                              (matched_df["onset"] <= matched_df["TF"])
     
     df_captured_onsets = matched_df[matched_df["captured"] == True].copy()
 
-    # 1) Calcular Estado Binario (para el escalón del gráfico)
+    
     events = []
     for _, row in df_files.iterrows():
         events.append((row["T0"], +1))
@@ -423,7 +429,7 @@ def plot_eeg_availability_with_onsetsV2_1_4(
     
     unique_days = sorted(events_df["DayStart"].unique())
 
-    # 2) Configuración del Plot
+
     fig, axes = plt.subplots(
         len(unique_days), 1, 
         figsize=(14, 3 * len(unique_days)), 
@@ -432,28 +438,28 @@ def plot_eeg_availability_with_onsetsV2_1_4(
     )
     if len(unique_days) == 1: axes = [axes]
 
-    # 3) Plot por cada día
+ 
     for ax, start_day in zip(axes, unique_days):
         start_day = pd.Timestamp(start_day)
         end_day = start_day + pd.Timedelta(days=1)
 
-        # Filtrar datos del día para la línea de presencia
+      
         day_data = events_df[(events_df["Time"] >= start_day) & (events_df["Time"] < end_day)].copy()
         
-        # Lógica de bordes para que no haya huecos al inicio/fin del día
+   
         prev_state = events_df.loc[events_df["Time"] < start_day, "State"]
         presence_at_start = int(prev_state.iloc[-1] > 0) if not prev_state.empty else 0
         boundary_points = pd.DataFrame({"Time": [start_day, end_day], "Presence": [presence_at_start, None]})
         day_data = pd.concat([day_data[["Time", "Presence"]], boundary_points], ignore_index=True).sort_values("Time")
         day_data["Presence"] = day_data["Presence"].ffill().astype(int)
 
-        # --- CÁLCULO DE DURACIÓN TOTAL ---
-        # Calculamos la diferencia entre puntos de cambio de estado
+       
+        
         day_data["Duration"] = day_data["Time"].diff().shift(-1)
         total_duration_td = day_data.loc[day_data["Presence"] == 1, "Duration"].sum()
         total_hours = total_duration_td.total_seconds() / 3600
 
-        # --- IDENTIFICAR ONSETS DEL DÍA ---
+  
         day_onsets = matched_df[(matched_df["onset"] >= start_day) & (matched_df["onset"] < end_day)]
         captured_list = []
 
@@ -462,18 +468,18 @@ def plot_eeg_availability_with_onsetsV2_1_4(
             ax.axvline(s_row["onset"], color=color, linestyle="--", linewidth=1.5, alpha=0.8)
             
             if s_row["captured"]:
-                # Guardamos la hora formateada para la leyenda interna
+                
                 captured_list.append(s_row["onset"].strftime("%H:%M:%S"))
 
         # --- VISUALS ---
         ax.step(day_data["Time"], day_data["Presence"], where="post", color="steelblue", linewidth=2)
         ax.fill_between(day_data["Time"], day_data["Presence"], step="post", alpha=0.2, color="steelblue")
         
-        # Título con horas acumuladas
+        
         ax.set_title(f"Date: {start_day.date()} | Total Recording: {total_hours:.2f} hrs", 
                      loc='left', fontweight='bold', fontsize=12)
         
-        # Cuadro de texto con los onsets detectados
+        
         if captured_list:
             onset_text = "Captured Onsets:\n" + "\n".join(captured_list)
             ax.text(1.01, 0.5, onset_text, transform=ax.transAxes, fontsize=9, 
@@ -496,11 +502,7 @@ def plot_eeg_availability_with_onsetsV2_1_4(
         plt.close()
 
     return df_captured_onsets
-import os
-from typing import Optional
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+
 
 
 def plot_eeg_availability_with_onsetsV2_1_5(
@@ -786,11 +788,11 @@ def apply_amplitude_cutoff_1_5(
         Windowed and clipped DataFrame
     """
 
-    # Copiar para no modificar original
+    
     EEG_clipped = EEG_Table.copy()
 
     # ---------------------------------------------------
-    # 1) Selección de ventana temporal (si se especifica)
+    # 1) Select the temporal interval, if specified
     # ---------------------------------------------------
     if start_sec is not None and end_sec is not None:
 
@@ -806,7 +808,7 @@ def apply_amplitude_cutoff_1_5(
             ]
 
     # ---------------------------------------------------
-    # 2) Aplicar clipping
+    # 2) Apply amplitude clipping
     # ---------------------------------------------------
     if "Time" in EEG_clipped.columns:
         signal_cols = EEG_clipped.columns.drop("Time")
@@ -914,7 +916,7 @@ def build_eeg_array_from_mat_1_6(
         return signal, file_path, EEG_Table
 
     return signal, file_path
-import matplotlib.pyplot as plt
+
 
 #=================================================================================
 #=================================================================================
@@ -1002,41 +1004,81 @@ def bandpass_filter_eegwin_1_8(
     notch_Q: float = 20.0
 ):
     """
-    Band-pass robusto usando SOS + sosfiltfilt (fase cero).
-
-    EEG_win:
-      - index: tiempo en segundos (numérico, creciente)
-      - columns: canales
-      - values: amplitud
+    Apply a robust zero-phase band-pass filter using second-order sections.
+    
+    Parameters
+    ----------
+    EEG_win : pd.DataFrame
+        EEG signal with time in seconds as the numeric, increasing index
+        and EEG channels as columns.
+    
+    lowcut : float
+        Lower cutoff frequency in Hz.
+    
+    highcut : float
+        Upper cutoff frequency in Hz.
+    
+    order : int
+        Butterworth filter order.
+    
+    check_nans : bool
+        If True, check for missing values before filtering.
+    
+    notch_freq : float or None
+        Optional notch-filter frequency in Hz.
+    
+    notch_Q : float
+        Quality factor of the notch filter.
+    
+    Returns
+    -------
+    EEG_win_filt : pd.DataFrame
+        Filtered EEG signal.
+    
+    fs : float
+        Inferred sampling frequency.
     """
 
-    # --- 1) Inferir fs desde el índice ---
+    # 1) Infer sampling frequency from the time index
     t = EEG_win.index.to_numpy(dtype=float)
     if t.size < 3:
-        raise ValueError("Muy pocas muestras para inferir fs y filtrar (necesitas >= 3).")
+        raise ValueError(
+    "Too few samples to infer the sampling frequency and apply the filter. "
+    "At least three samples are required."
+)
 
     dt = np.median(np.diff(t))
     if not np.isfinite(dt) or dt <= 0:
-        raise ValueError("El índice de tiempo debe ser numérico, finito y estrictamente creciente.")
+        raise ValueError(
+    "The time index must be numeric, finite, and strictly increasing."
+)
 
     fs = 1.0 / dt
     nyq = fs / 2.0
 
-    # --- 2) Validaciones de cortes ---
+    # 2) Validate cutoff frequencies
     if lowcut <= 0:
-        raise ValueError("lowcut debe ser > 0 Hz.")
+        raise ValueError("lowcut must be greater than 0 Hz.")
     if highcut >= nyq:
         raise ValueError(f"highcut ({highcut} Hz) debe ser < Nyquist ({nyq:.2f} Hz).")
     if lowcut >= highcut:
-        raise ValueError("lowcut debe ser < highcut.")
+        raise ValueError(
+    f"highcut ({highcut} Hz) must be below the Nyquist frequency "
+    f"({nyq:.2f} Hz)."
+)
     if notch_freq is not None and notch_freq >= nyq:
         
-        raise ValueError(f"notch_freq ({notch_freq} Hz) debe ser < Nyquist ({nyq:.2f} Hz).")
-    # --- 3) NaNs ---
+        raise ValueError(
+    f"highcut ({highcut} Hz) must be below the Nyquist frequency "
+    f"({nyq:.2f} Hz)."
+)
+    #3) Check for missing values
     if check_nans and EEG_win.isna().any().any():
-        raise ValueError("EEG_win contiene NaNs. Rellena/interpola antes de filtrar.")
+        raise ValueError(
+    "EEG_win contains NaN values. Fill or interpolate them before filtering."
+)
 
-    # --- 4) Diseñar filtro ---
+    #4) Design filters
     low  = lowcut / nyq
     high = highcut / nyq
     sos_band = butter(order, [low, high], btype="band", output="sos")
@@ -1046,7 +1088,7 @@ def bandpass_filter_eegwin_1_8(
         b, a = iirnotch(w0, notch_Q)
         sos_notch = tf2sos(b, a)
 
-    # --- 5) Filtrar ---
+    # 5) Apply filters
     X = EEG_win.to_numpy(dtype=float)  # (n_samples, n_channels)
     try:
         Xf = sosfiltfilt(sos_band, X, axis=0)
@@ -1055,9 +1097,10 @@ def bandpass_filter_eegwin_1_8(
             Xf = sosfiltfilt(sos_notch, Xf, axis=0)
 
     except ValueError as e:
+        
         raise ValueError(
-            f"No se pudo filtrar (posible ventana corta/padding). "
-            f"Prueba una ventana más larga o baja el orden. Error: {e}"
+            "Filtering failed, possibly because the window is too short for the "
+            f"required padding. Try a longer window or a lower filter order. Error: {e}"
         )
     EEG_win_filt = pd.DataFrame(Xf, index=EEG_win.index, columns=EEG_win.columns)
     return EEG_win_filt, fs
@@ -1101,7 +1144,7 @@ def full_recording_from_matfiles_1_9(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Normalizamos columnas clave (por si vienen como string)
+   # Normalize key columns in case they were loaded as strings
     dfm = df_matches.copy()
     if "file" not in dfm.columns or "onset" not in dfm.columns:
         raise ValueError("df_matches must contain columns: ['file', 'onset']")
@@ -1122,14 +1165,14 @@ def full_recording_from_matfiles_1_9(
         try:
             print(f"\n--- Processing file: {file_name} ---")
 
-            #  0) Obtener onsets asociados a ESTE mat file
+           # Extract seizure onsets associated with the current MAT file
             onsets = (
                 dfm.loc[dfm["file"] == file_name, "onset"]
                 .dropna()
                 .sort_values()
             )
 
-            # Guardar en formato ISO (fácil de leer y reproducible)
+            # Store timestamps in a readable and reproducible ISO format
             seizure_onsets_iso = onsets.dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
             #  0b) Extract T0 and TF associated with THIS .mat file
             df_file = dfm.loc[dfm["file"] == file_name].copy()
@@ -1175,7 +1218,7 @@ def full_recording_from_matfiles_1_9(
          # 5) Convert to numpy (C, N)
             arr = df_filtered[channel_cols].to_numpy(dtype=np.float32).T
         
-            # stats (siempre)
+            # Calculate channel statistics
             mu = arr.mean(axis=1, keepdims=True)      # (C,1)
             sigma = arr.std(axis=1, keepdims=True)    # (C,1)
             sigma = np.where(sigma < eps, eps, sigma)
@@ -1245,7 +1288,7 @@ def full_recording_from_matfiles_1_9_V2(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Normalizamos columnas clave (por si vienen como string)
+
     dfm = df_matches.copy()
     if "file" not in dfm.columns or "onset" not in dfm.columns:
         raise ValueError("df_matches must contain columns: ['file', 'onset']")
@@ -1267,7 +1310,7 @@ def full_recording_from_matfiles_1_9_V2(
             print(f"\n--- Processing file: {file_name} ---")
 
 
-            # ✅ 0) Extraer filas asociadas a ESTE mat file
+            
             df_file = dfm.loc[dfm["file"] == file_name].copy()
             
             # Ensure datetime format
@@ -1275,27 +1318,27 @@ def full_recording_from_matfiles_1_9_V2(
             df_file["T0"] = pd.to_datetime(df_file["T0"], errors="coerce")
             df_file["TF"] = pd.to_datetime(df_file["TF"], errors="coerce")
             
-            # Caso 1: el archivo NI SIQUIERA está en df_matches
+           
             if df_file.empty:
                 seizure_onsets_iso = np.array([np.nan], dtype=object)
                 t0_iso = np.array([np.nan], dtype=object)
                 tf_iso = np.array([np.nan], dtype=object)
             
             else:
-                # onsets válidos
+         
                 onsets = df_file["onset"].dropna().sort_values()
             
-                # Si no hay onset válido, guardar NaN
+       
                 if onsets.empty:
                     seizure_onsets_iso = np.array([np.nan], dtype=object)
                 else:
                     seizure_onsets_iso = onsets.dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
             
-                # T0 / TF
+               
                 t0_iso = df_file["T0"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
                 tf_iso = df_file["TF"].dt.strftime("%Y-%m-%d %H:%M:%S.%f").to_numpy(dtype=object)
             
-                # si por alguna razón quedan vacíos
+                
                 if t0_iso.size == 0:
                     t0_iso = np.array([np.nan], dtype=object)
                 if tf_iso.size == 0:
@@ -1378,12 +1421,6 @@ def full_recording_from_matfiles_1_9_V2(
 #=================================================================================
 # FUNCTION #10
 
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-
-import re
-import pandas as pd
 
 def _parse_compact_datetime_str(dt_str: str) -> pd.Timestamp:
     """
@@ -1685,13 +1722,12 @@ def visualize_seizure_windows_from_npz_1_10V3(
     output_dir: str = "."
 ):
     """
-    Visualiza segmentos consecutivos de EEG alrededor de cada seizure onset.
-
-    Modificaciones:
-    - Ambos canales se plotean en el mismo subplot por ventana
-    - channel_idx_2 se desplaza verticalmente +vertical_offset_uv
-    - El ploteo empieza pre_onset_sec antes del onset
-    - Se agrega sombreado amarillo suave de 2 s desde el onset
+    Visualize consecutive EEG segments around each seizure onset.
+    
+    Both EEG channels are plotted on the same axis for each window.
+    The second channel is vertically offset to improve visualization.
+    Plotting starts a specified number of seconds before seizure onset,
+    and the first two seconds after onset are highlighted.
     """
 
     data = np.load(npz_path, allow_pickle=True)
@@ -1871,7 +1907,7 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
     T0 = data["T0"][0]
     source_file = str(data["source_file"][0])
 
-    # --- limpiar onsets inválidos ---
+    # Remove invalid seizure onsets
     seizure_onsets_clean = []
     
     for s in seizure_onsets:
@@ -1882,7 +1918,7 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
             continue
         seizure_onsets_clean.append(s)
     
-    # si no hay seizures válidos → omitir archivo
+    # Skip the file if no valid seizure onsets are available
     if len(seizure_onsets_clean) == 0:
         print(f"{os.path.basename(npz_path)} → no seizures, skipping.")
         return
@@ -1895,7 +1931,7 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
 
     T0_str = str(T0)
 
-    # Corrige formato tipo "2019-11-0107:43:13.000000"
+    # Fix malformed timestamp strings
     if len(T0_str) >= 11 and T0_str[10] != " ":
         T0_str = T0_str[:10] + " " + T0_str[10:]
 
@@ -1913,11 +1949,11 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
     for s_idx, onset_str in enumerate(seizure_onsets_clean):
         onset_dt = _parse_compact_datetime_str(onset_str)
 
-        # posición del onset en samples
+        # Calculate the seizure-onset sample
         delta_sec = (onset_dt - T0_dt).total_seconds()
         onset_sample = int(round(delta_sec * fs))
 
-        # arrancar pre_onset_sec antes del onset
+        # Start plotting pre_onset_sec before seizure onset
         plot_start_sample = onset_sample - pre_onset_samples
         plot_end_sample = plot_start_sample + total_samples
 
@@ -1945,20 +1981,20 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
             segment_1 = X[channel_idx_1, start:end]
             segment_2 = X[channel_idx_2, start:end] + vertical_offset_uv
 
-            # tiempo relativo dentro de la ventana
+            # Relative time within the current window
             t_sec = np.arange(len(segment_1)) / fs
 
-            # tiempo absoluto de inicio/fin de la ventana
+            # Absolute start and end times of the current window
             window_start_dt = T0_dt + pd.to_timedelta(start / fs, unit="s")
             window_end_dt   = T0_dt + pd.to_timedelta(end / fs, unit="s")
 
-            # tiempo relativo al onset
+            # Time relative to seizure onset
             rel_start_sec = (start - onset_sample) / fs
             rel_end_sec   = (end - onset_sample) / fs
 
             ax = axes[w]
 
-            # sombreado amarillo suave de 2 s desde el onset, si cae en esta ventana
+            # Highlight the first two seconds after onset when it falls in this window
             # Mark the exact seizure onset time if it falls inside this window
             onset_in_window_sec = (onset_dt - window_start_dt).total_seconds()
             
@@ -1986,7 +2022,7 @@ def visualize_seizure_windows_from_npz_1_10VNormal(
             ax.plot(t_sec, segment_1, color="blue", linewidth=0.8, label=f"Ch {channel_idx_1}")
             ax.plot(t_sec, segment_2, color="red", linewidth=0.8, label=f"Ch {channel_idx_2} (+{vertical_offset_uv:.0f} z-score)")
 
-            # líneas guía
+            # Add channel reference lines
             ax.axhline(0, color="blue", linestyle="--", linewidth=0.6, alpha=0.7)
             ax.axhline(vertical_offset_uv, color="red", linestyle="--", linewidth=0.6, alpha=0.7)
 
@@ -2916,8 +2952,6 @@ def compute_global_channel_stats_1_15(all_files, key="X", verbose=True):
 
 # FUNCTION #16
 
-from pathlib import Path
-import numpy as np
 
 def apply_global_channel_normalization_1_16(
     all_files,

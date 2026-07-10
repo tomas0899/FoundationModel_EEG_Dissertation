@@ -13,6 +13,7 @@ from sklearn.metrics import (
     balanced_accuracy_score,
     f1_score
 )
+from datetime import date
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -378,7 +379,7 @@ def find_best_temporal_split_3_2(
     n = len(y)
 
     # Global proportion of class 1
-    # In your binary setup: class 1 = seizure
+    # In this binary classification setup, class 1 represents seizures
     global_ratio = y.mean()
 
     # Candidate positions where the training set may end
@@ -607,7 +608,7 @@ def train_decision_tree_gridsearch_3_4(
     Parameters
     ----------
     X_train : array-like or DataFrame
-        Training features. For your case, this can be the PCA-transformed features.
+        Training features. 
 
     y_train : array-like or Series
         Training labels.
@@ -920,7 +921,7 @@ def parse_classification_filename(filepath):
     if tree_rf_pattern:
         info = tree_rf_pattern.groupdict()
 
-        # Fixed rule: DT and RF are always PCA-based
+   
         info["input_type"] = "PCA"
         info["model"] = info["model"].replace("_", " ")
         info["scoring"] = None
@@ -1085,7 +1086,7 @@ def plot_metric_from_summary_long(
         ax.scatter(
             x_value,
             y_value,
-            marker="o",                      # same shape for all patients
+            marker="o",                      
             s=95,
             facecolors=patient_colors[patient],
             edgecolors="black",
@@ -1193,7 +1194,7 @@ def plot_metric_from_summary_long(
         Line2D(
             [0],
             [0],
-            marker="o",                      # no different shapes
+            marker="o",                      
             color="w",
             markerfacecolor=patient_colors[patient],
             markeredgecolor="black",
@@ -1289,7 +1290,7 @@ def extract_classification_metrics(csv_path):
     csv_path = Path(csv_path)
     df = pd.read_csv(csv_path)
 
-    # Remove accidental unnamed columns
+
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
     if "class_or_metric" not in df.columns:
@@ -1513,9 +1514,7 @@ def build_best_model_compact_table(
         == compact_table["best_by_weighted_f1"]
     )
 
-    # --------------------------------------------------------
-    # Optional: make values dissertation-friendly
-    # --------------------------------------------------------
+
 
     metric_cols = [
         "best_accuracy",
