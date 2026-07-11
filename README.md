@@ -8,7 +8,6 @@
 **Supervisors:** Dr. Dominic Burrows and Dr. Richard Rosch
 
 ---
-![Method Schema](Schema_method_dissertationKCL2026.svg)
 ## Repository logic: start here
 
 The source code is divided into three directories with different purposes:
@@ -34,7 +33,7 @@ This directory contains reusable Python functions used by the final analysis.
 - `tools_EEG_FE.py`: windowing, labelling, feature extraction, statistical analysis, PCA, and feature visualisation utilities.
 - `tools_EEG_models.py`: machine-learning, evaluation, summary, and model-comparison utilities.
 - The module files are imported by pipeline scripts and are not normally executed directly.
-
+* the method schema is at the end of this document
 ### `pipelines/`
 
 This directory contains the final executable scripts used to reproduce the dissertation workflow.
@@ -472,4 +471,4 @@ MSc Applied Bioinformatics
 King's College London
 
 **Supervisors:** Dr. Dominic Burrows and Dr. Richard Rosch
-
+![Method Schema](Schema_method_dissertationKCL2026.svg)
