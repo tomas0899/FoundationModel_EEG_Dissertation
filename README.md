@@ -471,4 +471,8 @@ MSc Applied Bioinformatics
 King's College London
 
 **Supervisors:** Dr. Dominic Burrows and Dr. Richard Rosch
+
+---
+
+## 15. Methodology schema
 ![Method Schema](Schema_method_dissertationKCL2026.svg)
