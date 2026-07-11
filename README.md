@@ -8,7 +8,7 @@
 **Supervisors:** Dr. Dominic Burrows and Dr. Richard Rosch
 
 ---
-
+![Method Schema](Schema_method_dissertationKCL2026.svg)
 ## Repository logic: start here
 
 The source code is divided into three directories with different purposes:
