@@ -15,6 +15,10 @@ The source code is divided into three directories with different purposes:
 
 ### `test_and_develop/`
 
+> [!IMPORTANT]
+> **`test_and_develop/` is not part of the main dissertation pipeline.**  
+> This directory is included only to document exploratory development, debugging, testing, prototype functions, and intermediate analyses. To reproduce the final workflow, use the scripts in `pipelines/`, which import the final reusable functions from `modules/`.
+
 This directory contains exploratory notebooks, debugging work, prototype functions, intermediate analyses, and code used during development.
 
 - It documents how the analysis was developed.
@@ -39,6 +43,17 @@ This directory contains the final executable scripts used to reproduce the disse
 - Pipeline scripts call functions from `modules/`.
 - Patient-specific paths and analysis parameters are separated from the core code through JSON configuration files.
 - For each configurable stage, first edit and run the corresponding JSON generator, then pass the generated JSON file to the pipeline script.
+
+### Software environment
+
+The repository root contains an `environment.yml` file documenting the package versions used for this project. The computational environment was created and managed with **micromamba** under the environment name `domain_expansion`.
+
+The environment can be reproduced with:
+
+```bash
+micromamba env create -f environment.yml
+micromamba activate domain_expansion
+```
 
 The intended workflow is therefore:
 
@@ -247,8 +262,6 @@ Reported outputs included:
 └── Main_project
     └── src
         ├── modules
-        │   ├── Guide.ipynb
-        │   ├── guide_Tools_EEG.ipynb
         │   ├── tools_EEG_Preprocess.py
         │   ├── tools_EEG_FE.py
         │   └── tools_EEG_models.py
@@ -452,10 +465,11 @@ The sqEEG dataset analysed in this dissertation was derived from:
 
 ---
 
-## 15. Author
+## 14. Author
 
 **Tomás Pérez Sánchez**  
 MSc Applied Bioinformatics  
 King's College London
 
 **Supervisors:** Dr. Dominic Burrows and Dr. Richard Rosch
+
