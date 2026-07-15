@@ -161,20 +161,18 @@ for dataset_name in ["Test", "Validation"]:
 
 
 # ============================================================
-# 8. Build compact best-model table
+# 8. Select models using validation and retrieve test metrics
 # ============================================================
 
 compact_best_model_table = (
-    TEEG_mod.build_best_model_compact_table(
+    TEEG_mod.build_validation_selected_model_table(
         summary_metrics_df=summary_metrics_df,
-        dataset_to_use="Test",
         output_path=(
             tables_output_dir
-            / "best_model_per_patient_compact_Test.csv"
-        )
+            / "validation_selected_model_test_performance.csv"
+        ),
     )
 )
-
 
 # ============================================================
 # 9. Save summary dataframes

@@ -1547,3 +1547,275 @@ def build_best_model_compact_table(
         print(f"Compact table saved to: {output_path}")
 
     return compact_table
+from pathlib import Path
+
+import pandas as pd
+
+
+def build_validation_selected_model_table(
+    summary_metrics_df,
+    output_path=None,
+):
+    """
+    Select the best model configuration for each patient using validation
+    weighted F1 and retrieve the corresponding test-set metrics.
+
+    Parameters
+    ----------
+    summary_metrics_df : pandas.DataFrame
+        Summary dataframe containing one row per patient, dataset and
+        model configuration.
+
+        Required columns:
+        - patient_id
+        - dataset
+        - model_group
+        - accuracy
+        - weighted_f1
+        - preictal_f1
+        - ictal_f1
+
+    output_path : str or pathlib.Path, optional
+        CSV path where the final table will be saved.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Compact patient-level table containing the validation-selected
+        configuration and its corresponding test performance.
+    """
+
+    required_columns = {
+        "patient_id",
+        "dataset",
+        "model_group",
+        "accuracy",
+        "weighted_f1",
+        "preictal_f1",
+        "ictal_f1",
+    }
+
+    missing_columns = (
+        required_columns
+        - set(summary_metrics_df.columns)
+    )
+
+    if missing_columns:
+        raise KeyError(
+            "The following required columns are missing from "
+            f"summary_metrics_df: {sorted(missing_columns)}"
+        )
+
+    working_df = summary_metrics_df.copy()
+
+    # ----------------------------------------------------------
+    # 1. Normalise dataset names
+    # ----------------------------------------------------------
+
+    working_df["_dataset_normalized"] = (
+        working_df["dataset"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    validation_df = working_df[
+        working_df["_dataset_normalized"].isin(
+            ["validation", "val"]
+        )
+    ].copy()
+
+    test_df = working_df[
+        working_df["_dataset_normalized"].eq("test")
+    ].copy()
+
+    if validation_df.empty:
+        raise ValueError(
+            "No validation results were found in summary_metrics_df."
+        )
+
+    if test_df.empty:
+        raise ValueError(
+            "No test results were found in summary_metrics_df."
+        )
+
+    # Ensure weighted F1 is numeric before using idxmax
+    validation_df["weighted_f1"] = pd.to_numeric(
+        validation_df["weighted_f1"],
+        errors="coerce",
+    )
+
+    if validation_df["weighted_f1"].isna().any():
+        invalid_rows = validation_df.loc[
+            validation_df["weighted_f1"].isna(),
+            ["patient_id", "model_group"],
+        ]
+
+        raise ValueError(
+            "Some validation weighted F1 values could not be "
+            f"interpreted as numbers:\n{invalid_rows}"
+        )
+
+    # ----------------------------------------------------------
+    # 2. Select configuration using validation weighted F1
+    # ----------------------------------------------------------
+
+    best_validation_idx = (
+        validation_df
+        .groupby(
+            "patient_id",
+            observed=True,
+        )["weighted_f1"]
+        .idxmax()
+    )
+
+    selected_validation_df = (
+        validation_df.loc[
+            best_validation_idx,
+            [
+                "patient_id",
+                "model_group",
+                "weighted_f1",
+            ],
+        ]
+        .rename(
+            columns={
+                "model_group":
+                    "Configuration selected by validation",
+                "weighted_f1":
+                    "Validation weighted F1",
+            }
+        )
+        .reset_index(drop=True)
+    )
+
+    # ----------------------------------------------------------
+    # 3. Prepare test metrics
+    # ----------------------------------------------------------
+
+    selected_test_metrics_df = (
+        test_df[
+            [
+                "patient_id",
+                "model_group",
+                "accuracy",
+                "weighted_f1",
+                "preictal_f1",
+                "ictal_f1",
+            ]
+        ]
+        .rename(
+            columns={
+                "model_group":
+                    "Configuration selected by validation",
+                "accuracy":
+                    "Test accuracy",
+                "weighted_f1":
+                    "Test weighted F1",
+                "preictal_f1":
+                    "Test preictal F1",
+                "ictal_f1":
+                    "Test ictal F1",
+            }
+        )
+    )
+
+    # There should be only one test row per patient/configuration
+    duplicated_test_rows = selected_test_metrics_df.duplicated(
+        subset=[
+            "patient_id",
+            "Configuration selected by validation",
+        ],
+        keep=False,
+    )
+
+    if duplicated_test_rows.any():
+        duplicates = selected_test_metrics_df.loc[
+            duplicated_test_rows,
+            [
+                "patient_id",
+                "Configuration selected by validation",
+            ],
+        ]
+
+        raise ValueError(
+            "Multiple test rows were found for the same patient "
+            f"and configuration:\n{duplicates}"
+        )
+
+    # ----------------------------------------------------------
+    # 4. Match validation-selected configurations with test
+    # ----------------------------------------------------------
+
+    final_model_summary_df = selected_validation_df.merge(
+        selected_test_metrics_df,
+        on=[
+            "patient_id",
+            "Configuration selected by validation",
+        ],
+        how="left",
+        validate="one_to_one",
+    )
+
+    missing_test_results = final_model_summary_df[
+        "Test weighted F1"
+    ].isna()
+
+    if missing_test_results.any():
+        missing_rows = final_model_summary_df.loc[
+            missing_test_results,
+            [
+                "patient_id",
+                "Configuration selected by validation",
+            ],
+        ]
+
+        raise FileNotFoundError(
+            "No matching test result was found for the following "
+            f"validation-selected configurations:\n{missing_rows}"
+        )
+
+    # ----------------------------------------------------------
+    # 5. Format final table
+    # ----------------------------------------------------------
+
+    final_model_summary_df = (
+        final_model_summary_df
+        .rename(
+            columns={
+                "patient_id": "Patient ID",
+            }
+        )
+        [
+            [
+                "Patient ID",
+                "Configuration selected by validation",
+                "Validation weighted F1",
+                "Test accuracy",
+                "Test weighted F1",
+                "Test preictal F1",
+                "Test ictal F1",
+            ]
+        ]
+        .sort_values("Patient ID")
+        .reset_index(drop=True)
+    )
+
+    # ----------------------------------------------------------
+    # 6. Save table
+    # ----------------------------------------------------------
+
+    if output_path is not None:
+        output_path = Path(output_path)
+
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        final_model_summary_df.to_csv(
+            output_path,
+            index=False,
+        )
+
+    return final_model_summary_df

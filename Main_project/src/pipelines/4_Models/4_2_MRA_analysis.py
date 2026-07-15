@@ -1,45 +1,60 @@
 from pathlib import Path
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.lines import Line2D
 from datetime import date
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from matplotlib.lines import Line2D
+from scipy.stats import pearsonr
+
+
 # ============================================================
-# 1. Import CSVs and merge dataframes
+# 1. Define paths
 # ============================================================
 
-input_dir = Path(
-    "/home/tperezsanchez/Tomas_PS_DissertationKCL2026/Main_project/results/together_results/MRA"
+project_root = Path(
+    "/home/tperezsanchez/Tomas_PS_DissertationKCL2026"
 )
 
-output_dir = Path(
-    "/home/tperezsanchez/Tomas_PS_DissertationKCL2026/Main_project/results/together_results/MRA"
+summary_tables_dir = (
+    project_root
+    / "Main_project"
+    / "results"
+    / "together_results"
+    / "summary_tables"
+)
+
+output_dir = (
+    project_root
+    / "Main_project"
+    / "results"
+    / "together_results"
+    / "MRA"
 )
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
+input_path = summary_tables_dir / "totalValmerged.pkl"
 
-df_merged = pd.read_csv(
-    input_dir / "MRA_merged_results.csv"
-)
-
-# Convert percentage of significant features into a proportion
-df_merged["prop_significant_features"] = (
-    df_merged["Significant features (%)"] / 100
-)
-
-df_merged
-
+if not input_path.exists():
+    raise FileNotFoundError(
+        f"Input file not found: {input_path}"
+    )
 
 
 # ============================================================
-# Bubble scatter plot
-# X = Data capture rate (%)
-# Y = Weighted F1
-# Bubble size = Seizure density
-# Colour = Patient number
-# Label = Patient number
+# 2. Load merged dataframe
+# ============================================================
+
+final_merged_df = pd.read_pickle(input_path)
+
+print(f"Loaded dataframe from: {input_path}")
+print(f"Shape: {final_merged_df.shape}")
+
+
+# ============================================================
+# 3. Patient definitions
 # ============================================================
 
 patient_number_map = {
@@ -54,160 +69,21 @@ patient_number_map = {
     "XB47Y": "P9"
 }
 
-patient_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
-
-df_plot = df_merged.copy()
-
-# Replace original patient IDs with assigned patient numbers
-df_plot["Patient"] = df_plot["Patient ID"].map(patient_number_map)
-
-# Optional check: identify unmapped patients
-unmapped_patients = df_plot.loc[df_plot["Patient"].isna(), "Patient ID"].unique()
-if len(unmapped_patients) > 0:
-    print("Warning: these Patient IDs were not mapped:", unmapped_patients)
-
-# Sort by assigned patient number
-df_plot["Patient"] = pd.Categorical(
-    df_plot["Patient"],
-    categories=patient_order,
-    ordered=True
-)
-
-df_plot = df_plot.sort_values("Patient")
-
-CB_color_cycle = [
-    '#2E0F4F',  # P1 - very dark violet
-    '#FF5F00',  # P2 - very bright orange
-    '#1B7837',  # P3 - dark green
-    '#f781bf',  # P4 - pink
-    '#a65628',  # P5 - brown
-    '#984ea3',  # P6 - purple
-    '#999999',  # P7 - grey
-    '#e41a1c',  # P8 - red
-    '#dede00'   # P9 - yellow
-]
-patient_colors = {
-    patient: CB_color_cycle[i]
-    for i, patient in enumerate(patient_order)
-}
-
-# Bubble size scaling
-density = df_plot["Seizure density"]
-
-if density.max() == density.min():
-    bubble_sizes = pd.Series(700, index=df_plot.index)
-else:
-    bubble_sizes = 200 + (
-        (density - density.min()) / (density.max() - density.min())
-    ) * 1200
-
-plt.figure(figsize=(10, 7))
-
-for i, row in df_plot.iterrows():
-    plt.scatter(
-        row["Data capture rate, %"],
-        row["Weighted F1"],
-        s=bubble_sizes.loc[i],
-        color=patient_colors[row["Patient"]],
-        alpha=0.78,
-        edgecolor="black",
-        linewidth=0.8
-    )
-
-    plt.text(
-        row["Data capture rate, %"] + 0.8,
-        row["Weighted F1"] + 0.005,
-        row["Patient"],
-        fontsize=9,
-        fontweight="bold"
-    )
-
-plt.xlabel("Data capture rate (%)")
-plt.ylabel("Weighted F1")
-plt.title("Relationship between data capture rate, weighted F1, and seizure density")
-
-plt.grid(True, linestyle="--", alpha=0.4)
-
-# Optional reference line
-plt.axhline(0.5, linestyle="--", color="grey", alpha=0.6)
-
-# Colour legend
-legend_handles = [
-    Line2D(
-        [0],
-        [0],
-        marker="o",
-        color="w",
-        label=patient,
-        markerfacecolor=patient_colors[patient],
-        markeredgecolor="black",
-        markersize=8
-    )
-    for patient in patient_order
+patient_order = [
+    "P1", "P2", "P3", "P4", "P5",
+    "P6", "P7", "P8", "P9"
 ]
 
-plt.legend(
-    handles=legend_handles,
-    title="Patient",
-    bbox_to_anchor=(1.05, 1),
-    loc="upper left",
-    frameon=True
-)
-
-plt.tight_layout()
-
-# Save as SVG in current notebook folder
-today = date.today().strftime("%Y-%m-%d")
-output_path = output_dir / f"bubble_data_capture_weighted_f1_seizure_density_CB_palette_{today}.svg"
-
-plt.savefig(output_path, format="svg", bbox_inches="tight")
-
-
-
-print(f"SVG saved in: {output_path}")
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from scipy.stats import pearsonr
-from matplotlib.lines import Line2D
-from pathlib import Path
-from datetime import date
-
-# ============================================================
-# Bubble scatter plot
-# X = Data capture rate (%)
-# Y = Weighted F1
-# Bubble size = Seizure density
-# Colour = Patient number
-# Label = Patient number
-# + Pearson correlation
-# ============================================================
-
-patient_number_map = {
-    "10OXG": "P1",
-    "1JSZ6": "P2",
-    "3ZL8B": "P3",
-    "F88R2": "P4",
-    "FP628": "P5",
-    "JYXFE": "P6",
-    "PN12G": "P7",
-    "RQXZ1": "P8",
-    "XB47Y": "P9"
-}
-
-patient_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
-
 CB_color_cycle = [
-    "#2E0F4F",  # P1 - very dark violet
-    "#FF5F00",  # P2 - very bright orange
-    "#1B7837",  # P3 - dark green
-    "#f781bf",  # P4 - pink
-    "#a65628",  # P5 - brown
-    "#984ea3",  # P6 - purple
-    "#999999",  # P7 - grey
-    "#e41a1c",  # P8 - red
-    "#dede00"   # P9 - yellow
+    "#2E0F4F",  # P1
+    "#FF5F00",  # P2
+    "#1B7837",  # P3
+    "#f781bf",  # P4
+    "#a65628",  # P5
+    "#984ea3",  # P6
+    "#999999",  # P7
+    "#e41a1c",  # P8
+    "#dede00"   # P9
 ]
 
 patient_colors = {
@@ -215,374 +91,335 @@ patient_colors = {
     for i, patient in enumerate(patient_order)
 }
 
-df_plot = df_merged.copy()
-
-# Keep only rows needed for this plot/correlation
-df_plot = df_plot.dropna(
-    subset=["Patient ID", "Data capture rate, %", "Weighted F1", "Seizure density"]
-)
-
-# Replace original patient IDs with assigned patient numbers
-df_plot["Patient"] = df_plot["Patient ID"].map(patient_number_map)
-
-# Optional check: identify unmapped patients
-unmapped_patients = df_plot.loc[df_plot["Patient"].isna(), "Patient ID"].unique()
-if len(unmapped_patients) > 0:
-    print("Warning: these Patient IDs were not mapped:", unmapped_patients)
-
-# Remove unmapped patients if any
-df_plot = df_plot.dropna(subset=["Patient"])
-
-# Sort by assigned patient number
-df_plot["Patient"] = pd.Categorical(
-    df_plot["Patient"],
-    categories=patient_order,
-    ordered=True
-)
-
-df_plot = df_plot.sort_values("Patient")
 
 # ============================================================
-# Correlation: Data capture rate vs Weighted F1
+# 4. Helper function to prepare plotting dataframe
 # ============================================================
 
-x = df_plot["Data capture rate, %"]
-y = df_plot["Weighted F1"]
+def prepare_plot_df(df, required_columns):
+    df_plot = df.copy()
 
-pearson_r, pearson_p = pearsonr(x, y)
-
-print("Pearson correlation between data capture rate and Weighted F1:")
-print(f"r = {pearson_r:.3f}, p = {pearson_p:.3f}")
-
-# ============================================================
-# Bubble size scaling
-# matplotlib 's' is area, not radius
-# ============================================================
-
-density = df_plot["Seizure density"]
-
-if density.max() == density.min():
-    bubble_sizes = pd.Series(600, index=df_plot.index)
-else:
-    bubble_sizes = 200 + (
-        (density - density.min()) / (density.max() - density.min())
-    ) * 1200
-
-# ============================================================
-# Plot
-# ============================================================
-
-plt.figure(figsize=(10, 7))
-
-for i, row in df_plot.iterrows():
-    plt.scatter(
-        row["Data capture rate, %"],
-        row["Weighted F1"],
-        s=bubble_sizes.loc[i],
-        color=patient_colors[row["Patient"]],
-        alpha=0.78,
-        edgecolor="black",
-        linewidth=0.8
+    df_plot[required_columns] = df_plot[required_columns].apply(
+        pd.to_numeric,
+        errors="coerce"
     )
 
-    plt.text(
-        row["Data capture rate, %"] + 0.8,
-        row["Weighted F1"] + 0.005,
-        row["Patient"],
-        fontsize=9,
-        fontweight="bold"
+    if "Study label" in df_plot.columns:
+        df_plot["Patient"] = df_plot["Study label"].astype(str).str.strip()
+    else:
+        df_plot["Patient"] = df_plot["Patient ID"].map(patient_number_map)
+
+    df_plot["Patient ID"] = (
+        df_plot["Patient ID"]
+        .astype(str)
+        .str.strip()
     )
 
-# ============================================================
-# Linear trend line
-# ============================================================
+    df_plot = df_plot.dropna(
+        subset=["Patient ID", "Patient"] + required_columns
+    ).copy()
 
-m, b = np.polyfit(x, y, 1)
+    unmapped_patients = df_plot.loc[
+        ~df_plot["Patient"].isin(patient_order),
+        "Patient ID"
+    ].unique()
 
-plt.plot(
-    x,
-    m * x + b,
-    linestyle="--",
-    color="black",
-    alpha=0.7,
-    label="Linear trend"
-)
+    if len(unmapped_patients) > 0:
+        print(
+            "Warning: these Patient IDs were not mapped:",
+            unmapped_patients
+        )
 
-# ============================================================
-# Correlation annotation inside plot
-# ============================================================
+    df_plot = df_plot[
+        df_plot["Patient"].isin(patient_order)
+    ].copy()
 
-plt.text(
-    0.05,
-    0.95,
-    f"Pearson r = {pearson_r:.2f}\np = {pearson_p:.3f}",
-    transform=plt.gca().transAxes,
-    fontsize=11,
-    verticalalignment="top",
-    bbox=dict(boxstyle="round", facecolor="white", alpha=0.8)
-)
-
-plt.xlabel("Data capture rate (%)")
-plt.ylabel("Weighted F1")
-plt.title("Relationship between data capture rate, weighted F1, and seizure density")
-
-plt.grid(True, linestyle="--", alpha=0.4)
-
-# Optional reference line
-plt.axhline(0.5, linestyle="--", color="grey", alpha=0.6)
-
-# ============================================================
-# Colour legend
-# ============================================================
-
-legend_handles = [
-    Line2D(
-        [0],
-        [0],
-        marker="o",
-        color="w",
-        label=patient,
-        markerfacecolor=patient_colors[patient],
-        markeredgecolor="black",
-        markersize=8
+    df_plot["Patient"] = pd.Categorical(
+        df_plot["Patient"],
+        categories=patient_order,
+        ordered=True
     )
-    for patient in patient_order
-]
 
-plt.legend(
-    handles=legend_handles,
-    title="Patient",
-    bbox_to_anchor=(1.05, 1),
-    loc="upper left",
-    frameon=True
-)
+    df_plot = (
+        df_plot
+        .sort_values("Patient")
+        .reset_index(drop=True)
+    )
 
-plt.tight_layout()
+    return df_plot
+
 
 # ============================================================
-# Save as SVG in current notebook folder
+# 5. Helper function to generate bubble plots
+# ============================================================
+
+def make_bubble_plot(
+    df,
+    x_col,
+    y_col,
+    size_col,
+    x_label,
+    y_label,
+    title,
+    output_filename,
+    add_accuracy_reference_line=False
+):
+    df_plot = prepare_plot_df(
+        df,
+        required_columns=[x_col, y_col, size_col]
+    )
+
+    x = df_plot[x_col]
+    y = df_plot[y_col]
+    density = df_plot[size_col]
+
+    # Pearson correlation
+    pearson_r, pearson_p = pearsonr(x, y)
+
+    print(f"\nPearson correlation for {x_col} vs {y_col}:")
+    print(f"r = {pearson_r:.3f}, p = {pearson_p:.3f}")
+
+    # Bubble sizes
+    if density.max() == density.min():
+        bubble_sizes = pd.Series(600, index=df_plot.index)
+    else:
+        bubble_sizes = 200 + (
+            (density - density.min())
+            / (density.max() - density.min())
+        ) * 1200
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for i, row in df_plot.iterrows():
+        ax.scatter(
+            row[x_col],
+            row[y_col],
+            s=bubble_sizes.loc[i],
+            color=patient_colors[row["Patient"]],
+            alpha=0.78,
+            edgecolor="black",
+            linewidth=0.8
+        )
+
+        x_offset = 0.8 if x.max() > 5 else 0.02
+        y_offset = 0.005 if y.max() <= 1.5 else 0.3
+
+        ax.text(
+            row[x_col] + x_offset,
+            row[y_col] + y_offset,
+            row["Patient"],
+            fontsize=9,
+            fontweight="bold"
+        )
+
+    # Linear trend line
+    m, b = np.polyfit(x, y, 1)
+
+    x_line = np.linspace(x.min(), x.max(), 200)
+
+    ax.plot(
+        x_line,
+        m * x_line + b,
+        linestyle="--",
+        color="black",
+        alpha=0.7
+    )
+
+    # Correlation annotation
+    ax.text(
+        0.05,
+        0.95,
+        f"Pearson r = {pearson_r:.2f}\np = {pearson_p:.3f}",
+        transform=ax.transAxes,
+        fontsize=11,
+        verticalalignment="top",
+        bbox={
+            "boxstyle": "round",
+            "facecolor": "white",
+            "alpha": 0.8
+        }
+    )
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+
+    ax.grid(
+        True,
+        linestyle="--",
+        alpha=0.4
+    )
+
+    if add_accuracy_reference_line:
+        ax.axhline(
+            0.5,
+            linestyle="--",
+            color="grey",
+            alpha=0.6
+        )
+
+    patients_present = df_plot["Patient"].astype(str).unique()
+
+    legend_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label=patient,
+            markerfacecolor=patient_colors[patient],
+            markeredgecolor="black",
+            markersize=8
+        )
+        for patient in patient_order
+        if patient in patients_present
+    ]
+
+    ax.legend(
+        handles=legend_handles,
+        title="Patient",
+        bbox_to_anchor=(1.05, 1),
+        loc="upper left",
+        frameon=True
+    )
+
+    plt.tight_layout()
+
+    output_path = output_dir / output_filename
+
+    plt.savefig(
+        output_path,
+        format="svg",
+        bbox_inches="tight"
+    )
+
+    plt.show()
+
+    print(f"SVG saved to: {output_path.resolve()}")
+
+    return {
+        "pearson_r": pearson_r,
+        "pearson_p": pearson_p,
+        "slope": m,
+        "intercept": b
+    }
+
+
+# ============================================================
+# 6. Generate plots
 # ============================================================
 
 today = date.today().strftime("%Y-%m-%d")
-output_path = output_dir / f"bubble_data_capture_weighted_f1_pearson_CB_palette_{today}.svg"
 
-plt.savefig(output_path, format="svg", bbox_inches="tight")
+# 6.1 Data capture rate (%) vs Test accuracy
+result_1 = make_bubble_plot(
+    df=final_merged_df,
+    x_col="Data capture rate, %",
+    y_col="Test accuracy",
+    size_col="Seizure density",
+    x_label="Data capture rate (%)",
+    y_label="Test accuracy",
+    title=(
+        "Relationship between data capture rate, "
+        "test accuracy, and seizure density"
+    ),
+    output_filename=(
+        f"bubble_data_capture_test_accuracy_pearson_{today}.svg"
+    ),
+    add_accuracy_reference_line=True
+)
 
+# 6.2 Significant features (%) vs Test accuracy
+result_2 = make_bubble_plot(
+    df=final_merged_df,
+    x_col="Significant features (%)",
+    y_col="Test accuracy",
+    size_col="Seizure density",
+    x_label="Significant features (%)",
+    y_label="Test accuracy",
+    title=(
+        "Relationship between significant features, "
+        "test accuracy, and seizure density"
+    ),
+    output_filename=(
+        f"bubble_significant_features_test_accuracy_pearson_{today}.svg"
+    ),
+    add_accuracy_reference_line=True
+)
 
+# 6.3 Data capture rate (%) vs Significant features (%)
+result_3 = make_bubble_plot(
+    df=final_merged_df,
+    x_col="Data capture rate, %",
+    y_col="Significant features (%)",
+    size_col="Seizure density",
+    x_label="Data capture rate (%)",
+    y_label="Significant features (%)",
+    title=(
+        "Relationship between data capture rate, "
+        "significant features, and seizure density"
+    ),
+    output_filename=(
+        f"bubble_data_capture_significant_features_pearson_{today}.svg"
+    ),
+    add_accuracy_reference_line=False
+)
 
-print(f"SVG saved in: {output_path}")
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from scipy.stats import pearsonr
-from matplotlib.lines import Line2D
-from pathlib import Path
-from datetime import date
 
 # ============================================================
-# Bubble scatter plot
-# X = Data capture rate (%)
-# Y = Best accuracy
-# Bubble size = Seizure density
-# Colour = Patient number
-# Label = Patient number
-# + Pearson correlation
+# 7. Multiple linear regression
+# Outcome = Test accuracy
+# Predictors = Data capture rate (%) + Significant features (%)
 # ============================================================
 
-patient_number_map = {
-    "10OXG": "P1",
-    "1JSZ6": "P2",
-    "3ZL8B": "P3",
-    "F88R2": "P4",
-    "FP628": "P5",
-    "JYXFE": "P6",
-    "PN12G": "P7",
-    "RQXZ1": "P8",
-    "XB47Y": "P9"
-}
+df_regression = final_merged_df.copy()
 
-patient_order = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
-
-CB_color_cycle = [
-    "#2E0F4F",  # P1 - very dark violet
-    "#FF5F00",  # P2 - very bright orange
-    "#1B7837",  # P3 - dark green
-    "#f781bf",  # P4 - pink
-    "#a65628",  # P5 - brown
-    "#984ea3",  # P6 - purple
-    "#999999",  # P7 - grey
-    "#e41a1c",  # P8 - red
-    "#dede00"   # P9 - yellow
+regression_columns = [
+    "Data capture rate, %",
+    "Significant features (%)",
+    "Test accuracy",
 ]
 
-patient_colors = {
-    patient: CB_color_cycle[i]
-    for i, patient in enumerate(patient_order)
-}
-
-df_plot = df_merged.copy()
-
-# Keep only rows needed for this plot/correlation
-df_plot = df_plot.dropna(
-    subset=["Patient ID", "Data capture rate, %", "Best accuracy", "Seizure density"]
+df_regression[regression_columns] = (
+    df_regression[regression_columns]
+    .apply(pd.to_numeric, errors="coerce")
 )
 
-# Replace original patient IDs with assigned patient numbers
-df_plot["Patient"] = df_plot["Patient ID"].map(patient_number_map)
+df_regression = df_regression.dropna(
+    subset=regression_columns
+).copy()
 
-# Optional check: identify unmapped patients
-unmapped_patients = df_plot.loc[df_plot["Patient"].isna(), "Patient ID"].unique()
-if len(unmapped_patients) > 0:
-    print("Warning: these Patient IDs were not mapped:", unmapped_patients)
+# Safety check in case significant features are still 0–1
+if df_regression["Significant features (%)"].max() <= 1:
+    df_regression["Significant features (%)"] *= 100
 
-# Remove unmapped patients if any
-df_plot = df_plot.dropna(subset=["Patient"])
-
-# Sort by assigned patient number
-df_plot["Patient"] = pd.Categorical(
-    df_plot["Patient"],
-    categories=patient_order,
-    ordered=True
-)
-
-df_plot = df_plot.sort_values("Patient")
-
-# ============================================================
-# Correlation: Data capture rate vs Best accuracy
-# ============================================================
-
-x = df_plot["Data capture rate, %"]
-y = df_plot["Best accuracy"]
-
-pearson_r, pearson_p = pearsonr(x, y)
-
-print("Pearson correlation between data capture rate and Best accuracy:")
-print(f"r = {pearson_r:.3f}, p = {pearson_p:.3f}")
-
-# ============================================================
-# Bubble size scaling
-# matplotlib 's' is area, not radius
-# ============================================================
-
-density = df_plot["Seizure density"]
-
-if density.max() == density.min():
-    bubble_sizes = pd.Series(600, index=df_plot.index)
-else:
-    bubble_sizes = 200 + (
-        (density - density.min()) / (density.max() - density.min())
-    ) * 1200
-
-# ============================================================
-# Plot
-# ============================================================
-
-plt.figure(figsize=(10, 7))
-
-for i, row in df_plot.iterrows():
-    plt.scatter(
-        row["Data capture rate, %"],
-        row["Best accuracy"],
-        s=bubble_sizes.loc[i],
-        color=patient_colors[row["Patient"]],
-        alpha=0.78,
-        edgecolor="black",
-        linewidth=0.8
-    )
-
-    plt.text(
-        row["Data capture rate, %"] + 0.8,
-        row["Best accuracy"] + 0.005,
-        row["Patient"],
-        fontsize=9,
-        fontweight="bold"
-    )
-
-# ============================================================
-# Linear trend line
-# ============================================================
-
-m, b = np.polyfit(x, y, 1)
-
-plt.plot(
-    x,
-    m * x + b,
-    linestyle="--",
-    color="black",
-    alpha=0.7
-)
-
-# ============================================================
-# Correlation annotation inside plot
-# ============================================================
-
-plt.text(
-    0.05,
-    0.95,
-    f"Pearson r = {pearson_r:.2f}\np = {pearson_p:.3f}",
-    transform=plt.gca().transAxes,
-    fontsize=11,
-    verticalalignment="top",
-    bbox=dict(boxstyle="round", facecolor="white", alpha=0.8)
-)
-
-plt.xlabel("Data capture rate (%)")
-plt.ylabel("Best accuracy")
-plt.title("Relationship between data capture rate, best accuracy, and seizure density")
-
-plt.grid(True, linestyle="--", alpha=0.4)
-
-# Optional reference line
-plt.axhline(0.5, linestyle="--", color="grey", alpha=0.6)
-
-# ============================================================
-# Colour legend
-# ============================================================
-
-legend_handles = [
-    Line2D(
-        [0],
-        [0],
-        marker="o",
-        color="w",
-        label=patient,
-        markerfacecolor=patient_colors[patient],
-        markeredgecolor="black",
-        markersize=8
-    )
-    for patient in patient_order
+X = df_regression[
+    [
+        "Data capture rate, %",
+        "Significant features (%)",
+    ]
 ]
 
-plt.legend(
-    handles=legend_handles,
-    title="Patient",
-    bbox_to_anchor=(1.05, 1),
-    loc="upper left",
-    frameon=True
-)
-
-plt.tight_layout()
-
-# ============================================================
-# Save as SVG in current notebook folder
-# ============================================================
-
-today = date.today().strftime("%Y-%m-%d")
-output_path = output_dir / f"bubble_data_capture_best_accuracy_pearson_CB_palette_{today}.svg"
-
-plt.savefig(output_path, format="svg", bbox_inches="tight")
-
-
-
-print(f"SVG saved in: {output_path}")
-
-import statsmodels.api as sm
-
-X = df_plot[["Data capture rate, %", "prop_significant_features"]]
 X = sm.add_constant(X)
 
-y = df_plot["Best accuracy"]
+y = df_regression["Test accuracy"]
 
 model = sm.OLS(y, X).fit()
+
+print("\nMultiple linear regression summary:")
 print(model.summary())
+
+
+# ============================================================
+# 8. Save regression summary
+# ============================================================
+
+regression_output_path = (
+    output_dir
+    / f"multiple_linear_regression_test_accuracy_{today}.txt"
+)
+
+with open(regression_output_path, "w") as f:
+    f.write(model.summary().as_text())
+
+print(f"\nRegression summary saved to: {regression_output_path.resolve()}")
